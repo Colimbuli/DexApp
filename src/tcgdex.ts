@@ -70,6 +70,8 @@ export interface SearchQuery {
   total?: number
   promoCode?: string
   lang?: LangChoice
+  /** weitere Nummern-Lesungen (OCR), werden ebenfalls nachgeschlagen */
+  candidates?: { number: number; total: number }[]
 }
 
 /**
@@ -87,8 +89,17 @@ export async function findCards(q: SearchQuery, limit = 8): Promise<CardInfo[]> 
 async function findCardsIn(lang: Lang, q: SearchQuery): Promise<CardInfo[]> {
   let setHits: CardInfo[] = []
   // 1. Weg: Sammlernummer + Setgröße – unabhängig vom (oft falsch gelesenen) Namen
-  if (q.number !== undefined && q.total !== undefined) {
-    setHits = await findBySetNumber(lang, q.number, q.total)
+  const cands = [
+    ...(q.number !== undefined && q.total !== undefined ? [{ number: q.number, total: q.total }] : []),
+    ...(q.candidates ?? []),
+  ].filter((c, i, a) => a.findIndex((x) => x.number === c.number && x.total === c.total) === i).slice(0, 3)
+  if (cands.length) {
+    const seenIds = new Set<string>()
+    for (const c of cands) {
+      for (const hit of await findBySetNumber(lang, c.number, c.total)) {
+        if (!seenIds.has(hit.id)) { seenIds.add(hit.id); setHits.push(hit) }
+      }
+    }
     const best = Math.max(0, ...setHits.flatMap((c) => q.names.map((n) => similarity(n, c.name))))
     // Treffer passt zum gelesenen Namen (oder es gibt keinen Namen) → fertig
     if (setHits.length && (best >= 0.5 || !q.names.length)) return setHits
@@ -118,9 +129,10 @@ async function findCardsIn(lang: Lang, q: SearchQuery): Promise<CardInfo[]> {
 export function rankCards(cards: CardInfo[], q: SearchQuery): CardInfo[] {
   const score = (c: CardInfo) => {
     let s = 0
-    if (q.number !== undefined && numericId(c.localId) === q.number) s += 3
-    if (q.total !== undefined && c.setTotal === q.total) s += 2
-    s += 2 * Math.max(0, ...q.names.map((n) => similarity(n, c.name)))
+    if (q.number !== undefined && numericId(c.localId) === q.number) s += 2
+    if (q.total !== undefined && c.setTotal === q.total) s += 1
+    // Name wiegt am stärksten: eine falsch gelesene Ziffer darf nicht gewinnen
+    s += 4 * Math.max(0, ...q.names.map((n) => similarity(n, c.name)))
     return s
   }
   return [...cards].sort((a, b) => score(b) - score(a))

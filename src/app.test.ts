@@ -169,3 +169,56 @@ describe('Erkennung A/B', () => {
     vi.unstubAllGlobals()
   })
 })
+
+import { numberMatches, vote } from './ocr'
+import { parseNumberInput } from './Search'
+import { pickMainCamera } from './camera'
+describe('Runde 7', () => {
+  it('Nummern-Kandidaten und Abstimmung', () => {
+    expect(numberMatches('x 025/159 * y 028/159')).toEqual([{ number: 25, total: 159 }, { number: 28, total: 159 }])
+    expect(numberMatches('© 2023/0')).toEqual([])
+    const v = vote([{ number: 28, total: 159 }, { number: 25, total: 159 }, { number: 25, total: 159 }])
+    expect(v[0]).toEqual({ number: 25, total: 159, votes: 2 })
+  })
+  it('Name schlägt falsch gelesene Ziffer', async () => {
+    clearSetCache()
+    const mk = (id: string, name: string) => ({ id, localId: id.split('-')[1], name, set: { cardCount: { official: 159 } }, pricing: {} })
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      const ok = (j: unknown) => ({ ok: true, status: 200, json: async () => j })
+      if (url.endsWith('/en/sets')) return ok([{ id: 'swsh12', name: 'Crown', cardCount: { official: 159 } }])
+      if (url.endsWith('/en/cards/swsh12-028')) return ok(mk('swsh12-028', 'Larvesta'))
+      if (url.endsWith('/en/cards/swsh12-025')) return ok(mk('swsh12-025', 'Volcarona'))
+      return { ok: false, status: 404, json: async () => ({}) }
+    }))
+    const res = await findCards({ names: ['WVolcarona'], number: 28, total: 159, candidates: [{ number: 25, total: 159 }], lang: 'en' })
+    expect(res[0].name).toBe('Volcarona')
+    vi.unstubAllGlobals()
+  })
+  it('Nummerneingabe mit Schrägstrich', () => {
+    expect(parseNumberInput('025/159')).toEqual({ number: 25, total: 159 })
+    expect(parseNumberInput(' 25 / 159 ')).toEqual({ number: 25, total: 159 })
+    expect(parseNumberInput('25')).toEqual({ number: 25, total: undefined })
+    expect(parseNumberInput('')).toEqual({})
+  })
+  it('wählt Hauptkamera statt Weitwinkel', () => {
+    const d = (deviceId: string, label: string) => ({ kind: 'videoinput', deviceId, label }) as MediaDeviceInfo
+    const list = [d('a', 'camera2 2, facing back'), d('b', 'camera2 0, facing back'), d('c', 'camera2 1, facing front')]
+    expect(pickMainCamera(list)?.deviceId).toBe('b')
+    expect(pickMainCamera(list, 'a')?.deviceId).toBe('a')
+    const ios = [d('x', 'Back Ultra Wide Camera'), d('y', 'Back Camera'), d('z', 'Front Camera')]
+    expect(pickMainCamera(ios)?.deviceId).toBe('y')
+  })
+})
+
+import { adaptiveThreshold } from './scan'
+describe('Binarisierung', () => {
+  it('dunkler Text auf Verlauf wird schwarz, Verlauf weiß', () => {
+    const w = 40, h = 10
+    const g: number[] = []
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) g.push(x === 20 ? 30 : 100 + x * 3) // Verlauf + dunkle Linie
+    const out = adaptiveThreshold(g, w, h, 5, 25)
+    expect(out[5 * w + 20]).toBe(0)
+    expect(out[5 * w + 5]).toBe(255)
+    expect(out[5 * w + 35]).toBe(255)
+  })
+})

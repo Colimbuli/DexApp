@@ -1,8 +1,35 @@
+export interface NumberCandidate {
+  number: number
+  total: number
+  votes: number
+}
+
 export interface ParsedOcr {
   number?: number
   total?: number
   promoCode?: string
   names: string[]
+  /** alle gelesenen „Nummer/Gesamt“-Varianten, häufigste zuerst */
+  candidates?: NumberCandidate[]
+}
+
+/** Alle „025/159“-Muster eines Textes. */
+export function numberMatches(text: string): { number: number; total: number }[] {
+  return [...text.matchAll(/(\d{1,3})\s*[\/|]\s*(\d{2,3})/g)]
+    .map((m) => ({ number: parseInt(m[1], 10), total: parseInt(m[2], 10) }))
+    .filter((c) => c.total >= 10 && c.number > 0 && c.number <= c.total + 150)
+}
+
+/** Zählt gleiche Lesungen zusammen; häufigste zuerst. */
+export function vote(reads: { number: number; total: number }[]): NumberCandidate[] {
+  const m = new Map<string, NumberCandidate>()
+  for (const r of reads) {
+    const k = `${r.number}/${r.total}`
+    const c = m.get(k) ?? { ...r, votes: 0 }
+    c.votes++
+    m.set(k, c)
+  }
+  return [...m.values()].sort((a, b) => b.votes - a.votes)
 }
 
 const STOP = new Set(
