@@ -144,3 +144,28 @@ describe('Absicherung falsche Nummer', () => {
     vi.unstubAllGlobals()
   })
 })
+
+describe('Erkennung A/B', () => {
+  it('ignoriert Vorstufe aus „Evolves from“ / „Entwickelt sich aus“', () => {
+    const en = parseOcr('Tincineroar HP 170\nEvolves from Torracat\n', '')
+    expect(en.names).toContain('Tincineroar')
+    expect(en.names).not.toContain('Torracat')
+    const de = parseOcr('Fuegro KP 170\nEntwickelt sich aus Miezunder\n', '')
+    expect(de.names).not.toContain('Miezunder')
+  })
+  it('sucht gekürzten Namen, wenn OCR ein Randzeichen hinzufügt', async () => {
+    clearSetCache()
+    const urls: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      urls.push(url)
+      const ok = (j: unknown) => ({ ok: true, status: 200, json: async () => j })
+      if (url.includes('?name=incinero')) return ok([{ id: 'sv5-032', localId: '032', name: 'Incineroar' }])
+      if (url.endsWith('/en/cards/sv5-032')) return ok({ id: 'sv5-032', localId: '032', name: 'Incineroar', set: { cardCount: { official: 162 } }, pricing: {} })
+      if (url.includes('?name=')) return ok([])
+      return { ok: false, status: 404, json: async () => ({}) }
+    }))
+    const res = await findCards({ names: ['Tincineroar'], lang: 'en' })
+    expect(res[0]?.name).toBe('Incineroar')
+    vi.unstubAllGlobals()
+  })
+})

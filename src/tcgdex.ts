@@ -96,7 +96,9 @@ async function findCardsIn(lang: Lang, q: SearchQuery): Promise<CardInfo[]> {
   // 2. Weg: Namenssuche (ergänzt Set-Treffer, falls die Nummer falsch gelesen wurde)
   const seen = new Map<string, RawBrief>()
   for (const name of q.names.slice(0, 4)) {
-    const briefs = await searchBriefs(name, lang)
+    let briefs = await searchBriefs(name, lang)
+    // OCR fügt oft am Rand ein Zeichen hinzu („Tincineroar“) → gekürzt erneut suchen
+    if (!briefs.length && name.length >= 6) briefs = await searchBriefs(name.slice(1, -1), lang)
     for (const b of briefs) if (!seen.has(b.id)) seen.set(b.id, b)
     if (q.number === undefined && seen.size > 0) break
     if (q.number !== undefined && [...seen.values()].some((b) => numericId(b.localId) === q.number)) break

@@ -35,7 +35,11 @@ export function parseOcr(top: string, bottom: string): ParsedOcr {
   }
 
   const seen = new Set<string>()
-  const lines = top.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+  // „Evolves from X“ / „Entwickelt sich aus X“ nennt die Vorstufe, nicht diese Karte
+  const lines = top
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !/evolves|entwickelt/i.test(l))
   for (const line of lines.slice(0, 6)) {
     for (const raw of line.split(/\s+/)) {
       const tok = raw.replace(/^[^A-Za-zÄÖÜäöüß]+|[^A-Za-zÄÖÜäöüß]+$/g, '')
