@@ -69,3 +69,17 @@ describe('db', () => {
     expect(bad.failed).toBe(1)
   })
 })
+
+import { cardRect, CARD_ASPECT } from './geometry'
+describe('geometry', () => {
+  it('Kartenrahmen passt in Hoch- und Querformat', () => {
+    for (const [w, h] of [[1920, 1080], [1080, 1920], [3000, 4000], [500, 500]]) {
+      const r = cardRect(w, h)
+      expect(r.x).toBeGreaterThanOrEqual(0)
+      expect(r.y).toBeGreaterThanOrEqual(0)
+      expect(r.x + r.w).toBeLessThanOrEqual(w)
+      expect(r.y + r.h).toBeLessThanOrEqual(h)
+      expect(r.w / r.h).toBeCloseTo(CARD_ASPECT)
+    }
+  })
+})
