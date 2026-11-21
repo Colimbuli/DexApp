@@ -85,6 +85,15 @@ export async function findCards(q: SearchQuery, limit = 8): Promise<CardInfo[]> 
 }
 
 async function findCardsIn(lang: Lang, q: SearchQuery): Promise<CardInfo[]> {
+  let setHits: CardInfo[] = []
+  // 1. Weg: Sammlernummer + Setgröße – unabhängig vom (oft falsch gelesenen) Namen
+  if (q.number !== undefined && q.total !== undefined) {
+    setHits = await findBySetNumber(lang, q.number, q.total)
+    const best = Math.max(0, ...setHits.flatMap((c) => q.names.map((n) => similarity(n, c.name))))
+    // Treffer passt zum gelesenen Namen (oder es gibt keinen Namen) → fertig
+    if (setHits.length && (best >= 0.5 || !q.names.length)) return setHits
+  }
+  // 2. Weg: Namenssuche (ergänzt Set-Treffer, falls die Nummer falsch gelesen wurde)
   const seen = new Map<string, RawBrief>()
   for (const name of q.names.slice(0, 4)) {
     const briefs = await searchBriefs(name, lang)
@@ -100,7 +109,8 @@ async function findCardsIn(lang: Lang, q: SearchQuery): Promise<CardInfo[]> {
   const details = (await Promise.all(list.slice(0, 30).map((b) => getCard(b.id, lang).catch(() => undefined)))).filter(
     (c): c is CardInfo => !!c,
   )
-  return rankCards(details, q).slice(0, 20)
+  const ids = new Set(details.map((c) => c.id))
+  return rankCards([...details, ...setHits.filter((c) => !ids.has(c.id))], q).slice(0, 20)
 }
 
 export function rankCards(cards: CardInfo[], q: SearchQuery): CardInfo[] {
@@ -108,8 +118,84 @@ export function rankCards(cards: CardInfo[], q: SearchQuery): CardInfo[] {
     let s = 0
     if (q.number !== undefined && numericId(c.localId) === q.number) s += 3
     if (q.total !== undefined && c.setTotal === q.total) s += 2
-    if (q.names.some((n) => c.name.toLowerCase() === n.toLowerCase())) s += 1
+    s += 2 * Math.max(0, ...q.names.map((n) => similarity(n, c.name)))
     return s
   }
   return [...cards].sort((a, b) => score(b) - score(a))
+}
+
+// ---------- Suche über Set und Nummer ----------
+
+interface RawSet {
+  id: string
+  name: string
+  cardCount?: { total?: number; official?: number }
+}
+
+const SET_TTL = 24 * 60 * 60 * 1000
+const setMem = new Map<Lang, RawSet[]>()
+/** nur für Tests */
+export const clearSetCache = () => setMem.clear()
+
+export async function getSets(lang: Lang): Promise<RawSet[]> {
+  const mem = setMem.get(lang)
+  if (mem) return mem
+  const key = `tcgdex-sets-${lang}`
+  try {
+    const c = JSON.parse(localStorage.getItem(key) ?? 'null') as { t: number; sets: RawSet[] } | null
+    if (c && Date.now() - c.t < SET_TTL && Array.isArray(c.sets)) {
+      setMem.set(lang, c.sets)
+      return c.sets
+    }
+  } catch { /* Cache nicht verfügbar */ }
+  const sets = await getJson<RawSet[]>(lang, '/sets')
+  setMem.set(lang, sets)
+  try { localStorage.setItem(key, JSON.stringify({ t: Date.now(), sets })) } catch { /* egal */ }
+  return sets
+}
+
+/** Mögliche localId-Schreibweisen einer Nummer: „044“, „44“. */
+export function localIdVariants(n: number): string[] {
+  return [...new Set([String(n).padStart(3, '0'), String(n)])]
+}
+
+export async function findBySetNumber(lang: Lang, number: number, total: number): Promise<CardInfo[]> {
+  const sets = (await getSets(lang)).filter((x) => x.cardCount?.official === total).slice(0, 8)
+  const found = await Promise.all(
+    sets.map(async (set) => {
+      for (const lid of localIdVariants(number)) {
+        const c = await getCard(`${set.id}-${lid}`, lang).catch(() => undefined)
+        if (c) return c
+      }
+      return undefined
+    }),
+  )
+  return found.filter((c): c is CardInfo => !!c)
+}
+
+// ---------- unscharfer Namensvergleich ----------
+
+const norm = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '')
+
+export function levenshtein(a: string, b: string): number {
+  const prev = Array.from({ length: b.length + 1 }, (_, i) => i)
+  for (let i = 1; i <= a.length; i++) {
+    let diag = prev[0]
+    prev[0] = i
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = prev[j]
+      prev[j] = Math.min(prev[j] + 1, prev[j - 1] + 1, diag + (a[i - 1] === b[j - 1] ? 0 : 1))
+      diag = tmp
+    }
+  }
+  return prev[b.length]
+}
+
+/** 0…1; vergleicht den OCR-Token mit dem Kartennamen und dessen einzelnen Wörtern. */
+export function similarity(ocr: string, name: string): number {
+  const a = norm(ocr)
+  if (!a) return 0
+  const parts = [name, ...name.split(/[\s-]+/)].map(norm).filter(Boolean)
+  return Math.max(0, ...parts.map((b) => 1 - levenshtein(a, b) / Math.max(a.length, b.length)))
 }

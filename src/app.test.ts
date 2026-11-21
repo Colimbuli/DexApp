@@ -94,3 +94,53 @@ describe('englisch', () => {
     expect(p.names).not.toContain('Basic')
   })
 })
+
+import { findCards, similarity, localIdVariants, clearSetCache } from './tcgdex'
+import { vi } from 'vitest'
+describe('Suche über Nummer', () => {
+  it('unscharfer Namensvergleich', () => {
+    expect(similarity('EJektek', 'Elektek')).toBeGreaterThan(0.8)
+    expect(similarity('EJektek', 'Glurak')).toBeLessThan(0.5)
+    expect(similarity('Pikachu', 'Pikachu V')).toBe(1)
+    expect(localIdVariants(44)).toEqual(['044', '44'])
+  })
+  it('findet 044/163 trotz falschem Namen und wählt das passende Set', async () => {
+    const card = (id: string, name: string) => ({ id, localId: '044', name, set: { name: id, cardCount: { official: 163 } }, pricing: { cardmarket: { trend: 1 } } })
+    const fetchMock = vi.fn(async (url: string) => {
+      const ok = (j: unknown) => ({ ok: true, status: 200, json: async () => j })
+      if (url.endsWith('/de/sets')) return ok([
+        { id: 'swsh5', name: 'Kampfstile', cardCount: { official: 163 } },
+        { id: 'xx1', name: 'Anderes', cardCount: { official: 163 } },
+        { id: 'yy', name: 'Falsch', cardCount: { official: 100 } },
+      ])
+      if (url.endsWith('/de/cards/swsh5-044')) return ok(card('swsh5-044', 'Elektek'))
+      if (url.endsWith('/de/cards/xx1-044')) return ok(card('xx1-044', 'Raichu'))
+      return { ok: false, status: 404, json: async () => ({}) }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const res = await findCards({ names: ['EJektek'], number: 44, total: 163, lang: 'de' })
+    expect(res.map((c) => c.id)).toEqual(['swsh5-044', 'xx1-044'])
+    expect(fetchMock.mock.calls.some(([u]) => String(u).includes('yy-'))).toBe(false)
+    expect(fetchMock.mock.calls.some(([u]) => String(u).includes('?name='))).toBe(false)
+    vi.unstubAllGlobals()
+  })
+})
+
+describe('Absicherung falsche Nummer', () => {
+  it('ergänzt Namenssuche, wenn Set-Treffer nicht zum Namen passt', async () => {
+    clearSetCache()
+    const mk = (id: string, localId: string, name: string, total: number) => ({ id, localId, name, set: { cardCount: { official: total } }, pricing: {} })
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      const ok = (j: unknown) => ({ ok: true, status: 200, json: async () => j })
+      if (url.endsWith('/de/sets')) return ok([{ id: 'a', name: 'A', cardCount: { official: 163 } }])
+      if (url.endsWith('/de/cards/a-044')) return ok(mk('a-044', '044', 'Raichu', 163))
+      if (url.includes('?name=Glurak')) return ok([{ id: 'b-004', localId: '004', name: 'Glurak' }])
+      if (url.endsWith('/de/cards/b-004')) return ok(mk('b-004', '004', 'Glurak', 102))
+      return { ok: false, status: 404, json: async () => ({}) }
+    }))
+    const res = await findCards({ names: ['Glurak'], number: 44, total: 163, lang: 'de' })
+    expect(res.map((c) => c.id)).toContain('b-004')
+    expect(res.map((c) => c.id)).toContain('a-044')
+    vi.unstubAllGlobals()
+  })
+})

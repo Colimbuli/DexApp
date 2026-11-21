@@ -49,7 +49,7 @@ export async function scanCanvas(
     return text
   }
 
-  const top = await read('Name', band(src, w, h, 0, 0.16, 1600))
+  const top = await read('Name', band(src, w, h, 0, 0.22, 1600))
   const bottom = await read('Nummer', band(src, w, h, 0.86, 1, 1600))
   const parsed = parseOcr(top, bottom)
 
