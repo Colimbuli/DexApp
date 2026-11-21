@@ -1,0 +1,49 @@
+export interface ParsedOcr {
+  number?: number
+  total?: number
+  promoCode?: string
+  names: string[]
+}
+
+const STOP = new Set(
+  [
+    'kp', 'basis', 'phase', 'entwicklung', 'pokémon', 'pokemon', 'trainer', 'energie', 'fähigkeit', 'angriff',
+    'schwäche', 'resistenz', 'rückzug', 'unterstützer', 'item', 'stadion', 'werkzeug', 'entwickelt', 'aus',
+    'ex', 'gx', 'vmax', 'vstar', 'illus', 'regel', 'regeln', 'nicht', 'der', 'die', 'das', 'und', 'von', 'wenn',
+    'dein', 'deine', 'deiner', 'gegnerische', 'gegnerischen', 'aktive', 'aktiven', 'karte', 'karten', 'münzwurf',
+  ].map((s) => s.toLowerCase()),
+)
+
+/** Zerlegt OCR-Rohtext in Sammlernummer und Namenskandidaten. */
+export function parseOcr(top: string, bottom: string): ParsedOcr {
+  const out: ParsedOcr = { names: [] }
+
+  const all = `${bottom}\n${top}`
+  const m = all.match(/(\d{1,3})\s*[\/|]\s*(\d{2,3})/)
+  if (m) {
+    out.number = parseInt(m[1], 10)
+    out.total = parseInt(m[2], 10)
+  } else {
+    const p = all.match(/\b(SWSH|SVP|SV|SM|XY|BW|HGSS|DP|TG|GG)\s?-?(\d{1,3})\b/i)
+    if (p) {
+      out.promoCode = (p[1] + p[2]).toUpperCase()
+      out.number = parseInt(p[2], 10)
+    }
+  }
+
+  const seen = new Set<string>()
+  const lines = top.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+  for (const line of lines.slice(0, 6)) {
+    for (const raw of line.split(/\s+/)) {
+      const tok = raw.replace(/^[^A-Za-zÄÖÜäöüß]+|[^A-Za-zÄÖÜäöüß]+$/g, '')
+      if (tok.length < 3 || !/^[A-Za-zÄÖÜäöüéß'’.\-]+$/.test(tok)) continue
+      const key = tok.toLowerCase()
+      if (STOP.has(key) || seen.has(key)) continue
+      seen.add(key)
+      out.names.push(tok)
+    }
+  }
+  // längere Tokens zuerst – Rauschen ist meist kurz
+  out.names.sort((a, b) => b.length - a.length)
+  return out
+}
