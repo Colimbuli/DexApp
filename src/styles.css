@@ -35,3 +35,4 @@ dialog::backdrop{background:#000a}
 .seg button{flex:1;background:none;padding:8px;color:var(--muted)}
 .seg button.on{background:var(--panel2);color:var(--text);font-weight:600}
 .badge{display:inline-block;font-size:11px;font-weight:700;padding:1px 6px;border-radius:4px;background:var(--panel2);color:var(--text);margin-left:6px;vertical-align:middle}
+.toast{position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ok);color:#10301d;font-weight:600;padding:10px 16px;border-radius:10px;box-shadow:0 4px 16px #0008;z-index:10;max-width:calc(100% - 32px)}

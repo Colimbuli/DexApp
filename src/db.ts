@@ -23,6 +23,14 @@ class AppDb extends Dexie {
 
 export const db = new AppDb()
 
+// Öffnet ein anderer Tab eine neuere Datenbankversion, schließt Dexie diese Verbindung.
+// Statt danach still zu scheitern, lädt dieser (veraltete) Tab neu.
+db.on('versionchange', () => {
+  db.close()
+  if (typeof location !== 'undefined') location.reload()
+  return false
+})
+
 const hex = (buf: ArrayBuffer) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('')
 
 export async function hashPin(pin: string, salt: string): Promise<string> {
