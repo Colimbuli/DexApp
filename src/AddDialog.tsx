@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { CardInfo, Condition } from './types'
 import { basePrice, CONDITION_LABEL, fmtEur, unitValue } from './pricing'
 import { addToCollection } from './db'
+import { LangBadge } from './LangSelect'
 
 export function AddDialog({ card, profileId, onClose }: { card?: CardInfo; profileId: number; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null)
@@ -25,7 +26,7 @@ export function AddDialog({ card, profileId, onClose }: { card?: CardInfo; profi
       <div className="item">
         {card.image && <img src={card.image} alt="" />}
         <div className="grow">
-          <strong>{card.name}</strong>
+          <strong>{card.name}</strong><LangBadge lang={card.lang} />
           <div className="muted">{card.setName} · {card.localId}{card.setTotal ? `/${card.setTotal}` : ''}</div>
           <div className="muted">{card.rarity}</div>
         </div>

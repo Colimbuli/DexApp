@@ -31,3 +31,7 @@ nav button.on{color:var(--accent);font-weight:600}
 .total{font-size:26px;font-weight:700;color:var(--accent)}
 dialog{background:var(--panel);color:var(--text);border:0;border-radius:14px;max-width:420px;width:calc(100% - 32px);padding:16px}
 dialog::backdrop{background:#000a}
+.seg{display:flex;background:var(--panel);border-radius:8px;padding:3px;gap:3px;margin-bottom:10px}
+.seg button{flex:1;background:none;padding:8px;color:var(--muted)}
+.seg button.on{background:var(--panel2);color:var(--text);font-weight:600}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:1px 6px;border-radius:4px;background:var(--panel2);color:var(--text);margin-left:6px;vertical-align:middle}

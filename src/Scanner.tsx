@@ -5,6 +5,7 @@ import { findCards } from './tcgdex'
 import type { CardInfo } from './types'
 import type { ParsedOcr } from './ocr'
 import { Results } from './Results'
+import { LangSelect, useLangChoice } from './LangSelect'
 
 export function Scanner({ onPick }: { onPick: (c: CardInfo) => void }) {
   const video = useRef<HTMLVideoElement>(null)
@@ -17,6 +18,7 @@ export function Scanner({ onPick }: { onPick: (c: CardInfo) => void }) {
   const [busy, setBusy] = useState(false)
   const [debug, setDebug] = useState<ScanResult['debug']>()
   const [frame, setFrame] = useState<Rect>()
+  const [lang, setLang] = useLangChoice()
 
   function updateFrame() {
     const v = video.current
@@ -54,7 +56,7 @@ export function Scanner({ onPick }: { onPick: (c: CardInfo) => void }) {
       setDebug(d)
       if (!p.names.length) { setErr('Kein Kartenname erkannt. Näher ran, besser beleuchten, Reflexe vermeiden – oder die Suche nutzen.'); return }
       setStatus('Suche Karte …')
-      setCards(await findCards({ names: p.names, number: p.number, total: p.total, promoCode: p.promoCode }))
+      setCards(await findCards({ names: p.names, number: p.number, total: p.total, promoCode: p.promoCode, lang }))
     } catch (e) {
       setErr('Fehler: ' + (e as Error).message + ' (Scan braucht Internet für Texterkennung und Kartendaten)')
     } finally { setBusy(false); setStatus('') }
@@ -80,6 +82,7 @@ export function Scanner({ onPick }: { onPick: (c: CardInfo) => void }) {
   return (
     <main>
       <h1>Scannen</h1>
+      <LangSelect value={lang} onChange={setLang} />
       {camOn ? (
         <>
           <div className="cam">

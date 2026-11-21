@@ -1,27 +1,31 @@
 import { useMemo, useState } from 'react'
 import { db, exportBackup, importBackup, refreshPrices } from './db'
 import { useLive, download } from './hooks'
-import type { CollectionEntry, Condition } from './types'
+import type { CollectionEntry, Condition, LangChoice } from './types'
 import { CONDITION_LABEL, fmtEur, totalValue, unitValue } from './pricing'
 import { getCard } from './tcgdex'
 import { toCsv } from './csv'
+import { LangBadge } from './LangSelect'
 
 export function Collection({ profileId }: { profileId: number }) {
   const entries = useLive(() => db.entries.where('profileId').equals(profileId).toArray(), [profileId], [] as CollectionEntry[])
   const [q, setQ] = useState('')
+  const [langF, setLangF] = useState<LangChoice>('both')
   const [sort, setSort] = useState<'added' | 'value' | 'name'>('added')
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
 
   const shown = useMemo(() => {
-    const f = entries.filter((e) => (e.name + ' ' + e.setName).toLowerCase().includes(q.toLowerCase()))
+    const f = entries.filter(
+      (e) => (langF === 'both' || (e.lang ?? 'de') === langF) && (e.name + ' ' + e.setName).toLowerCase().includes(q.toLowerCase()),
+    )
     const by = {
       added: (a: CollectionEntry, b: CollectionEntry) => b.addedAt.localeCompare(a.addedAt),
       value: (a: CollectionEntry, b: CollectionEntry) => (unitValue(b) ?? 0) * b.qty - (unitValue(a) ?? 0) * a.qty,
       name: (a: CollectionEntry, b: CollectionEntry) => a.name.localeCompare(b.name, 'de'),
     }[sort]
     return f.sort(by)
-  }, [entries, q, sort])
+  }, [entries, q, sort, langF])
 
   const count = entries.reduce((s, e) => s + e.qty, 0)
   const missing = entries.filter((e) => unitValue(e) === undefined).length
@@ -57,6 +61,11 @@ export function Collection({ profileId }: { profileId: number }) {
           <option value="value">Wert</option>
           <option value="name">Name</option>
         </select>
+        <select value={langF} onChange={(e) => setLangF(e.target.value as LangChoice)}>
+          <option value="both">DE + EN</option>
+          <option value="de">Nur DE</option>
+          <option value="en">Nur EN</option>
+        </select>
       </div>
       {shown.map((e) => <Row key={e.id} e={e} />)}
       {entries.length === 0 && <p className="muted">Noch leer. Karten über „Scan“ oder „Suche“ hinzufügen.</p>}
@@ -86,7 +95,7 @@ function Row({ e }: { e: CollectionEntry }) {
     <div className="card item">
       {e.image && <img src={e.image} alt="" loading="lazy" />}
       <div className="grow">
-        <strong>{e.name}</strong>
+        <strong>{e.name}</strong><LangBadge lang={e.lang} />
         <div className="muted">{e.setName} · {e.localId}</div>
         <div className="row" style={{ marginTop: 4 }}>
           <select value={e.condition} onChange={(ev) => db.entries.update(e.id!, { condition: ev.target.value as Condition })} style={{ padding: 4 }}>

@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie'
-import type { CardInfo, CollectionEntry, Condition, Profile } from './types'
+import type { CardInfo, CollectionEntry, Condition, Lang, Profile } from './types'
 import { basePrice } from './pricing'
 
 class AppDb extends Dexie {
@@ -11,6 +11,13 @@ class AppDb extends Dexie {
       profiles: '++id, name',
       entries: '++id, profileId, cardId',
     })
+    this.version(2)
+      .stores({ entries: '++id, profileId, cardId, lang' })
+      .upgrade((tx) =>
+        tx.table('entries').toCollection().modify((e: CollectionEntry) => {
+          e.lang ??= 'de'
+        }),
+      )
   }
 }
 
@@ -55,7 +62,7 @@ export async function addToCollection(profileId: number, card: CardInfo, o: AddO
   const existing = await db.entries
     .where('profileId')
     .equals(profileId)
-    .filter((e) => e.cardId === card.id && e.condition === o.condition && e.holo === o.holo)
+    .filter((e) => e.cardId === card.id && e.lang === card.lang && e.condition === o.condition && e.holo === o.holo)
     .first()
   const price = {
     basePrice: card.pricing.eur,
@@ -69,6 +76,7 @@ export async function addToCollection(profileId: number, card: CardInfo, o: AddO
   await db.entries.add({
     profileId,
     cardId: card.id,
+    lang: card.lang,
     name: card.name,
     setName: card.setName ?? '',
     localId: card.localId,
@@ -83,22 +91,23 @@ export async function addToCollection(profileId: number, card: CardInfo, o: AddO
 
 export async function refreshPrices(
   profileId: number,
-  fetchCard: (id: string) => Promise<CardInfo | undefined>,
+  fetchCard: (id: string, lang: Lang) => Promise<CardInfo | undefined>,
   onProgress?: (done: number, total: number) => void,
 ): Promise<{ updated: number; failed: number }> {
   const entries = await db.entries.where('profileId').equals(profileId).toArray()
-  const ids = [...new Set(entries.map((e) => e.cardId))]
+  const keys = [...new Set(entries.map((e) => `${e.lang ?? 'de'}|${e.cardId}`))]
   let updated = 0
   let failed = 0
   let done = 0
-  for (const id of ids) {
+  for (const key of keys) {
+    const [lang, id] = key.split(/\|(.*)/s) as [Lang, string]
     try {
-      const card = await fetchCard(id)
+      const card = await fetchCard(id, lang)
       if (!card || basePrice(card.pricing, false) === undefined) throw new Error('kein Preis')
       await db.entries
         .where('profileId')
         .equals(profileId)
-        .filter((e) => e.cardId === id)
+        .filter((e) => e.cardId === id && (e.lang ?? 'de') === lang)
         .modify({
           basePrice: card.pricing.eur,
           baseHoloPrice: card.pricing.eurHolo,
@@ -108,7 +117,7 @@ export async function refreshPrices(
     } catch {
       failed++
     }
-    onProgress?.(++done, ids.length)
+    onProgress?.(++done, keys.length)
   }
   return { updated, failed }
 }
@@ -132,7 +141,7 @@ export async function exportBackup(profileId: number): Promise<Backup> {
 export async function importBackup(profileId: number, data: unknown): Promise<number> {
   const b = data as Backup
   if (!b || b.version !== 1 || !Array.isArray(b.entries)) throw new Error('Ungültige Sicherungsdatei')
-  const rows = b.entries.map((e) => ({ ...e, profileId, qty: Math.max(1, Math.floor(Number(e.qty) || 1)) }))
+  const rows = b.entries.map((e) => ({ ...e, profileId, qty: Math.max(1, Math.floor(Number(e.qty) || 1)), lang: e.lang === 'en' ? 'en' : 'de' }))
   await db.entries.bulkAdd(rows as CollectionEntry[])
   return rows.length
 }

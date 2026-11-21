@@ -1,6 +1,6 @@
-import type { CardInfo } from './types'
+import type { CardInfo, Lang, LangChoice } from './types'
 
-const BASE = 'https://api.tcgdex.net/v2/de'
+const BASE = 'https://api.tcgdex.net/v2/'
 
 interface RawBrief {
   id: string
@@ -17,8 +17,8 @@ interface RawCard extends RawBrief {
   }
 }
 
-async function getJson<T>(path: string): Promise<T> {
-  const res = await fetch(BASE + path)
+async function getJson<T>(lang: Lang, path: string): Promise<T> {
+  const res = await fetch(BASE + lang + path)
   if (res.status === 404) return [] as unknown as T
   if (!res.ok) throw new Error(`TCGdex-Fehler ${res.status}`)
   return (await res.json()) as T
@@ -28,10 +28,11 @@ export const imageUrl = (image?: string) => (image ? `${image}/low.webp` : undef
 
 const num = (v: unknown) => (typeof v === 'number' && isFinite(v) && v > 0 ? v : undefined)
 
-export function mapCard(raw: RawCard): CardInfo {
+export function mapCard(raw: RawCard, lang: Lang): CardInfo {
   const cm = raw.pricing?.cardmarket ?? {}
   return {
     id: raw.id,
+    lang,
     name: raw.name,
     localId: raw.localId,
     image: imageUrl(raw.image),
@@ -46,16 +47,16 @@ export function mapCard(raw: RawCard): CardInfo {
   }
 }
 
-export async function searchBriefs(name: string): Promise<RawBrief[]> {
+export async function searchBriefs(name: string, lang: Lang): Promise<RawBrief[]> {
   const q = name.trim()
   if (!q) return []
-  return getJson<RawBrief[]>(`/cards?name=${encodeURIComponent(q)}`)
+  return getJson<RawBrief[]>(lang, `/cards?name=${encodeURIComponent(q)}`)
 }
 
-export async function getCard(id: string): Promise<CardInfo | undefined> {
-  const raw = await getJson<RawCard | never[]>(`/cards/${encodeURIComponent(id)}`)
+export async function getCard(id: string, lang: Lang): Promise<CardInfo | undefined> {
+  const raw = await getJson<RawCard | never[]>(lang, `/cards/${encodeURIComponent(id)}`)
   if (Array.isArray(raw)) return undefined
-  return mapCard(raw)
+  return mapCard(raw, lang)
 }
 
 const numericId = (localId: string) => {
@@ -68,6 +69,7 @@ export interface SearchQuery {
   number?: number
   total?: number
   promoCode?: string
+  lang?: LangChoice
 }
 
 /**
@@ -75,9 +77,17 @@ export interface SearchQuery {
  * und lädt für die besten Treffer die Details (Set, Preise).
  */
 export async function findCards(q: SearchQuery, limit = 8): Promise<CardInfo[]> {
+  const langs: Lang[] = !q.lang || q.lang === 'both' ? ['de', 'en'] : [q.lang]
+  const results = await Promise.allSettled(langs.map((l) => findCardsIn(l, q)))
+  const ok = results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
+  if (!ok.length && results.every((r) => r.status === 'rejected')) throw (results[0] as PromiseRejectedResult).reason
+  return rankCards(ok, q).slice(0, limit)
+}
+
+async function findCardsIn(lang: Lang, q: SearchQuery): Promise<CardInfo[]> {
   const seen = new Map<string, RawBrief>()
   for (const name of q.names.slice(0, 4)) {
-    const briefs = await searchBriefs(name)
+    const briefs = await searchBriefs(name, lang)
     for (const b of briefs) if (!seen.has(b.id)) seen.set(b.id, b)
     if (q.number === undefined && seen.size > 0) break
     if (q.number !== undefined && [...seen.values()].some((b) => numericId(b.localId) === q.number)) break
@@ -87,10 +97,10 @@ export async function findCards(q: SearchQuery, limit = 8): Promise<CardInfo[]> 
     const byNumber = list.filter((b) => numericId(b.localId) === q.number)
     if (byNumber.length) list = byNumber
   }
-  const details = (await Promise.all(list.slice(0, 30).map((b) => getCard(b.id).catch(() => undefined)))).filter(
+  const details = (await Promise.all(list.slice(0, 30).map((b) => getCard(b.id, lang).catch(() => undefined)))).filter(
     (c): c is CardInfo => !!c,
   )
-  return rankCards(details, q).slice(0, limit)
+  return rankCards(details, q).slice(0, 20)
 }
 
 export function rankCards(cards: CardInfo[], q: SearchQuery): CardInfo[] {

@@ -1,3 +1,8 @@
+export type Lang = 'de' | 'en'
+export type LangChoice = Lang | 'both'
+
+export const LANG_LABEL: Record<Lang, string> = { de: 'DE', en: 'EN' }
+
 export type Condition = 'MT' | 'NM' | 'EX' | 'GD' | 'LP' | 'PL' | 'PO'
 
 export interface CardPricing {
@@ -10,6 +15,7 @@ export interface CardPricing {
 
 export interface CardInfo {
   id: string
+  lang: Lang
   name: string
   localId: string
   setName?: string
@@ -30,6 +36,7 @@ export interface CollectionEntry {
   id?: number
   profileId: number
   cardId: string
+  lang: Lang
   name: string
   setName: string
   localId: string

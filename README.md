@@ -1,6 +1,6 @@
 # Kartenscanner (PWA)
 
-Pokémon-Karten (deutsch) scannen, bewerten und in einer lokalen Sammlung verwalten.
+Pokémon-Karten (deutsch und englisch) scannen, bewerten und in einer lokalen Sammlung verwalten.
 
 ## Starten
 ```
@@ -13,8 +13,8 @@ Kamera und PIN-Hash brauchen HTTPS oder localhost. Fürs Handy die gebaute App �
 (z. B. GitHub Pages, Netlify) und „Zum Startbildschirm hinzufügen“.
 
 ## Funktionsweise
-- **Scan:** Karte im Rahmen aufnehmen → Tesseract.js (OCR, `deu`) liest Namen (oben) und Sammlernummer (unten) → Treffer über die TCGdex-API (deutsche Kartendaten) → Auswahl bestätigen.
-- **Preis:** Cardmarket-Trendpreis (EUR) aus TCGdex, mit Zustandsfaktor (siehe `src/pricing.ts`) – grobe Schätzung.
+- **Scan:** Karte im Rahmen aufnehmen → Tesseract.js (OCR, `deu+eng`) liest Namen (oben) und Sammlernummer (unten) → Treffer über die TCGdex-API (deutscher und englischer Katalog, wählbar) → Auswahl bestätigen.
+- **Preis:** Cardmarket-Trendpreis (EUR) aus TCGdex, mit Zustandsfaktor (siehe `src/pricing.ts`) – grobe Schätzung. Der Preis gilt pro Karte, nicht pro Sprache: DE und EN erhalten denselben Wert.
 - **Daten:** IndexedDB im Browser, mehrere lokale Profile, optionale PIN (kein Verschlüsselungsschutz). Backup/Restore als JSON, Export als CSV.
 - Scan und Suche brauchen Internet; die Sammlung ist offline nutzbar.
 

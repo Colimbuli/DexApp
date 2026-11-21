@@ -10,6 +10,9 @@ const STOP = new Set(
     'kp', 'basis', 'phase', 'entwicklung', 'pokémon', 'pokemon', 'trainer', 'energie', 'fähigkeit', 'angriff',
     'schwäche', 'resistenz', 'rückzug', 'unterstützer', 'item', 'stadion', 'werkzeug', 'entwickelt', 'aus',
     'ex', 'gx', 'vmax', 'vstar', 'illus', 'regel', 'regeln', 'nicht', 'der', 'die', 'das', 'und', 'von', 'wenn',
+    'hp', 'basic', 'stage', 'evolves', 'from', 'ability', 'attack', 'weakness', 'resistance', 'retreat',
+    'supporter', 'stadium', 'tool', 'energy', 'the', 'and', 'your', 'opponent', 'opponent\'s', 'active', 'card', 'cards',
+    'flip', 'coin', 'damage', 'rule', 'this', 'pokemon\'s', 'pokémon\'s', 'put', 'into', 'play',
     'dein', 'deine', 'deiner', 'gegnerische', 'gegnerischen', 'aktive', 'aktiven', 'karte', 'karten', 'münzwurf',
   ].map((s) => s.toLowerCase()),
 )

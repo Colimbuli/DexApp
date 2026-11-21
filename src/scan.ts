@@ -4,7 +4,7 @@ import { parseOcr, type ParsedOcr } from './ocr'
 let workerPromise: Promise<Worker> | undefined
 
 function getWorker(onStatus?: (s: string) => void): Promise<Worker> {
-  workerPromise ??= createWorker('deu', 1, {
+  workerPromise ??= createWorker('deu+eng', 1, {
     logger: (m) => onStatus?.(`${m.status} ${Math.round((m.progress ?? 0) * 100)} %`),
   })
   return workerPromise
