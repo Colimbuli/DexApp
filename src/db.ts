@@ -1,10 +1,18 @@
 import Dexie, { type Table } from 'dexie'
-import type { CardInfo, CollectionEntry, Condition, Lang, Profile } from './types'
+import type { CardDetails, CardInfo, CollectionEntry, Condition, Lang, Profile } from './types'
 import { basePrice } from './pricing'
+
+export interface CacheRow<T> {
+  key: string
+  t: number
+  data: T
+}
 
 class AppDb extends Dexie {
   profiles!: Table<Profile, number>
   entries!: Table<CollectionEntry, number>
+  cardCache!: Table<CacheRow<CardInfo | null>, string>
+  setCache!: Table<CacheRow<unknown>, string>
   constructor() {
     super('kartenscanner')
     this.version(1).stores({
@@ -18,6 +26,7 @@ class AppDb extends Dexie {
           e.lang ??= 'de'
         }),
       )
+    this.version(3).stores({ cardCache: '&key', setCache: '&key' })
   }
 }
 
@@ -90,6 +99,7 @@ export async function addToCollection(profileId: number, card: CardInfo, o: AddO
     localId: card.localId,
     setTotal: card.setTotal,
     rarity: card.rarity ?? '',
+    ...cardDetails(card),
     image: card.image,
     qty: o.qty,
     condition: o.condition,
@@ -124,6 +134,7 @@ export async function refreshPrices(
           priceUpdated: card.pricing.updated ?? new Date().toISOString(),
           rarity: card.rarity ?? '',
           setTotal: card.setTotal,
+          ...cardDetails(card),
         })
       updated++
     } catch {
@@ -158,23 +169,45 @@ export async function importBackup(profileId: number, data: unknown): Promise<nu
   return rows.length
 }
 
-/** Ergänzt Seltenheit und Setgröße bei älteren Einträgen (einmalig, braucht Internet). */
+export const INFO_VERSION = 2
+
+/** Felder für Filter, aus Kartendaten und (optional) Erscheinungsjahr des Sets */
+export function cardDetails(card: CardInfo, year?: number): CardDetails & { infoV?: number } {
+  const d: CardDetails & { infoV?: number } = {
+    setId: card.setId,
+    category: card.category,
+    stage: card.stage,
+    types: card.types,
+    hp: card.hp,
+    illustrator: card.illustrator,
+    regulationMark: card.regulationMark,
+  }
+  if (year !== undefined) { d.year = year; d.infoV = INFO_VERSION }
+  return d
+}
+
+/**
+ * Ergänzt bei älteren Einträgen Seltenheit, Setgröße, Typ, Phase, Illustrator,
+ * Regulierungszeichen und Erscheinungsjahr (einmalig, braucht Internet).
+ */
 export async function backfillCardInfo(
   profileId: number,
   fetchCard: (id: string, lang: Lang) => Promise<CardInfo | undefined>,
+  fetchYear: (setId: string, lang: Lang) => Promise<number | undefined>,
 ): Promise<number> {
-  const missing = await db.entries.where('profileId').equals(profileId).filter((e) => e.rarity === undefined).toArray()
+  const missing = await db.entries.where('profileId').equals(profileId).filter((e) => (e.infoV ?? 0) < INFO_VERSION).toArray()
   const keys = [...new Set(missing.map((e) => `${e.lang ?? 'de'}|${e.cardId}`))]
   let done = 0
   for (const key of keys) {
     const [lang, id] = key.split(/\|(.*)/s) as [Lang, string]
     const card = await fetchCard(id, lang).catch(() => undefined)
     if (!card) continue
+    const year = card.setId ? await fetchYear(card.setId, lang).catch(() => undefined) : undefined
     await db.entries
       .where('profileId')
       .equals(profileId)
       .filter((e) => e.cardId === id && (e.lang ?? 'de') === lang)
-      .modify({ rarity: card.rarity ?? '', setTotal: card.setTotal })
+      .modify({ rarity: card.rarity ?? '', setTotal: card.setTotal, ...cardDetails(card, year ?? 0) })
     done++
   }
   return done

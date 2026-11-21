@@ -272,3 +272,35 @@ describe('Seltenheit & Sondernummern', () => {
     vi.unstubAllGlobals()
   })
 })
+
+import { applyFilters, facetOptions, FACETS } from './filters'
+import { backfillCardInfo, INFO_VERSION } from './db'
+describe('Filter & Kartendaten', () => {
+  it('Facetten und Filter', () => {
+    const items = [
+      { setName: '151', types: ['Feuer'], stage: 'Phase 1', rarity: 'Nicht so häufig', regulationMark: 'G', illustrator: 'Nurikabe', year: 2023, lang: 'de' },
+      { setName: '151', types: ['Wasser'], stage: 'Basis', rarity: 'Häufig', regulationMark: 'G', illustrator: 'X', year: 2023, lang: 'en' },
+      { setName: 'Kampfstile', types: ['Elektro'], stage: 'Basis', rarity: 'Selten', regulationMark: 'E', year: 2021, lang: 'de' },
+    ]
+    const year = FACETS.find((f) => f.key === 'year')!
+    expect(facetOptions(items, year)).toEqual(['2023', '2021'])
+    expect(applyFilters(items, FACETS, { year: '2023', type: 'Feuer' })).toHaveLength(1)
+    expect(applyFilters(items, FACETS, { reg: 'G', lang: 'EN' })[0].types).toEqual(['Wasser'])
+    expect(applyFilters(items, FACETS, {})).toHaveLength(3)
+  })
+  it('mapCard übernimmt Filterfelder', () => {
+    const c = mapCard({ ...raw, types: ['Feuer'], stage: 'Phase 1', hp: 100, illustrator: 'Nurikabe', regulationMark: 'G', set: { id: 'sv03.5', name: '151', cardCount: { official: 165 } } } as never, 'de')
+    expect(c).toMatchObject({ setId: 'sv03.5', types: ['Feuer'], stage: 'Phase 1', illustrator: 'Nurikabe', regulationMark: 'G' })
+  })
+  it('Backfill ergänzt Typ, Jahr usw. einmalig', async () => {
+    const id = await createProfile('BF')
+    await db.entries.add({ profileId: id, cardId: 'sv03.5-078', lang: 'de', name: 'Gallopa', setName: '151', localId: '078', qty: 1, condition: 'NM', holo: false, addedAt: '' })
+    let calls = 0
+    const fetchCard = async () => { calls++; return mapCard({ ...raw, id: 'sv03.5-078', rarity: 'Nicht so häufig', types: ['Feuer'], set: { id: 'sv03.5', cardCount: { official: 165 } } } as never, 'de') }
+    await backfillCardInfo(id, fetchCard, async () => 2023)
+    const e = (await db.entries.where('profileId').equals(id).first())!
+    expect(e).toMatchObject({ year: 2023, types: ['Feuer'], setId: 'sv03.5', rarity: 'Nicht so häufig', setTotal: 165, infoV: INFO_VERSION })
+    await backfillCardInfo(id, fetchCard, async () => 2023)
+    expect(calls).toBe(1)
+  })
+})

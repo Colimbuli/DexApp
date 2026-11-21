@@ -22,7 +22,28 @@ export interface CardInfo {
   setTotal?: number
   image?: string
   rarity?: string
+  setId?: string
+  /** Pokémon, Trainer, Energie (Katalogsprache) */
+  category?: string
+  /** Basis, Phase 1, Phase 2 … */
+  stage?: string
+  types?: string[]
+  hp?: number
+  illustrator?: string
+  regulationMark?: string
   pricing: CardPricing
+}
+
+/** Kartendaten, die zusätzlich zur Sammlung gespeichert und gefiltert werden */
+export interface CardDetails {
+  setId?: string
+  category?: string
+  stage?: string
+  types?: string[]
+  hp?: number
+  illustrator?: string
+  regulationMark?: string
+  year?: number
 }
 
 export interface Profile {
@@ -32,7 +53,7 @@ export interface Profile {
   pinHash?: string
 }
 
-export interface CollectionEntry {
+export interface CollectionEntry extends CardDetails {
   id?: number
   profileId: number
   cardId: string
@@ -43,6 +64,8 @@ export interface CollectionEntry {
   setTotal?: number
   /** Seltenheit laut Katalog; '' = unbekannt, undefined = noch nicht ermittelt */
   rarity?: string
+  /** Version der ergänzten Kartendaten; fehlt/kleiner → im Hintergrund nachladen */
+  infoV?: number
   image?: string
   qty: number
   condition: Condition

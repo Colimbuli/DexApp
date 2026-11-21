@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { backfillCardInfo, db, exportBackup, importBackup, refreshPrices } from './db'
 import { useLive, download } from './hooks'
-import type { CollectionEntry, Condition, LangChoice } from './types'
+import type { CollectionEntry, Condition } from './types'
 import { CONDITION_LABEL, fmtEur, totalValue, unitValue } from './pricing'
 import { getCard } from './tcgdex'
 import { toCsv } from './csv'
@@ -9,26 +9,30 @@ import { LangBadge } from './LangSelect'
 import { RarityBadge } from './Rarity'
 import { formatNumber } from './rarity'
 import { openImage } from './ImageViewer'
+import { Filters } from './Filters'
+import { applyFilters, FACETS, type FilterState } from './filters'
+import { getSetYear } from './cache'
+import { INFO_VERSION } from './db'
 
 export function Collection({ profileId }: { profileId: number }) {
   const entries = useLive(() => db.entries.where('profileId').equals(profileId).toArray(), [profileId], [] as CollectionEntry[])
   const [q, setQ] = useState('')
-  const [langF, setLangF] = useState<LangChoice>('both')
+  const [filters, setFilters] = useState<FilterState>({})
   const [sort, setSort] = useState<'added' | 'value' | 'name'>('added')
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
   const backfilled = useRef(false)
 
-  // ältere Einträge ohne Seltenheit/Setgröße einmal pro Aufruf im Hintergrund ergänzen
+  // ältere Einträge ohne Seltenheit/Typ/Jahr usw. einmal pro Aufruf im Hintergrund ergänzen
   useEffect(() => {
-    if (backfilled.current || !entries.some((e) => e.rarity === undefined) || !navigator.onLine) return
+    if (backfilled.current || !entries.some((e) => (e.infoV ?? 0) < INFO_VERSION) || !navigator.onLine) return
     backfilled.current = true
-    backfillCardInfo(profileId, getCard).catch(() => {})
+    backfillCardInfo(profileId, getCard, getSetYear).catch(() => {})
   }, [entries, profileId])
 
   const shown = useMemo(() => {
-    const f = entries.filter(
-      (e) => (langF === 'both' || (e.lang ?? 'de') === langF) && (e.name + ' ' + e.setName).toLowerCase().includes(q.toLowerCase()),
+    const f = applyFilters(entries, FACETS, filters).filter((e) =>
+      (e.name + ' ' + e.setName + ' ' + (e.illustrator ?? '')).toLowerCase().includes(q.toLowerCase()),
     )
     const by = {
       added: (a: CollectionEntry, b: CollectionEntry) => b.addedAt.localeCompare(a.addedAt),
@@ -36,7 +40,7 @@ export function Collection({ profileId }: { profileId: number }) {
       name: (a: CollectionEntry, b: CollectionEntry) => a.name.localeCompare(b.name, 'de'),
     }[sort]
     return f.sort(by)
-  }, [entries, q, sort, langF])
+  }, [entries, q, sort, filters])
 
   const count = entries.reduce((s, e) => s + e.qty, 0)
   const missing = entries.filter((e) => unitValue(e) === undefined).length
@@ -65,19 +69,16 @@ export function Collection({ profileId }: { profileId: number }) {
         <div className="total">{fmtEur(totalValue(entries))}</div>
         <div className="muted">Schätzwert nach Cardmarket-Trend, angepasst an den Zustand.{missing ? ` ${missing} Einträge ohne Preis.` : ''}</div>
       </div>
-      <div className="row" style={{ marginBottom: 10 }}>
-        <input placeholder="Filtern …" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 2 }} />
+      <div className="toolbar">
+        <input placeholder="Suchen …" value={q} onChange={(e) => setQ(e.target.value)} />
         <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
           <option value="added">Neueste</option>
           <option value="value">Wert</option>
           <option value="name">Name</option>
         </select>
-        <select value={langF} onChange={(e) => setLangF(e.target.value as LangChoice)}>
-          <option value="both">DE + EN</option>
-          <option value="de">Nur DE</option>
-          <option value="en">Nur EN</option>
-        </select>
       </div>
+      <Filters items={entries} facets={FACETS} state={filters} onChange={setFilters} />
+      {shown.length !== entries.length && <p className="muted">{shown.length} von {entries.length} Einträgen · Wert {fmtEur(totalValue(shown))}</p>}
       {shown.map((e) => <Row key={e.id} e={e} />)}
       {entries.length === 0 && <p className="muted">Noch leer. Karten über „Scan“ oder „Suche“ hinzufügen.</p>}
       <h2 style={{ marginTop: 24 }}>Verwalten</h2>

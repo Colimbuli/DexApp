@@ -11,7 +11,13 @@ interface RawBrief {
 
 interface RawCard extends RawBrief {
   rarity?: string
-  set?: { name?: string; cardCount?: { official?: number; total?: number } }
+  category?: string
+  stage?: string
+  types?: string[]
+  hp?: number
+  illustrator?: string
+  regulationMark?: string
+  set?: { id?: string; name?: string; cardCount?: { official?: number; total?: number } }
   pricing?: {
     cardmarket?: Record<string, number | string | null | undefined>
   }
@@ -39,6 +45,13 @@ export function mapCard(raw: RawCard, lang: Lang): CardInfo {
     rarity: raw.rarity,
     setName: raw.set?.name,
     setTotal: raw.set?.cardCount?.official,
+    setId: raw.set?.id ?? raw.id.replace(/-[^-]+$/, ''),
+    category: raw.category,
+    stage: raw.stage,
+    types: Array.isArray(raw.types) ? raw.types : undefined,
+    hp: typeof raw.hp === 'number' ? raw.hp : undefined,
+    illustrator: raw.illustrator,
+    regulationMark: raw.regulationMark,
     pricing: {
       eur: num(cm['trend']) ?? num(cm['avg']),
       eurHolo: num(cm['trend-holo']) ?? num(cm['avg-holo']),
@@ -140,10 +153,23 @@ export function rankCards(cards: CardInfo[], q: SearchQuery): CardInfo[] {
 
 // ---------- Suche über Set und Nummer ----------
 
-interface RawSet {
+export interface RawSet {
   id: string
   name: string
   cardCount?: { total?: number; official?: number }
+}
+
+export interface SetDetail extends RawSet {
+  releaseDate?: string
+  serie?: { id?: string; name?: string }
+  abbreviation?: { official?: string; localized?: string }
+  cards: { id: string; localId: string; name: string; image?: string }[]
+}
+
+export async function getSetDetail(lang: Lang, id: string): Promise<SetDetail | undefined> {
+  const raw = await getJson<SetDetail | never[]>(lang, `/sets/${encodeURIComponent(id)}`)
+  if (Array.isArray(raw)) return undefined
+  return { ...raw, cards: (raw.cards ?? []).map((c) => ({ ...c, image: imageUrl(c.image) })) }
 }
 
 const SET_TTL = 24 * 60 * 60 * 1000

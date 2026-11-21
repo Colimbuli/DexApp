@@ -15,6 +15,9 @@ Kamera und PIN-Hash brauchen HTTPS oder localhost. Fürs Handy die gebaute App �
 ## Funktionsweise
 - **Scan:** Karte im Rahmen aufnehmen → Tesseract.js (OCR, `deu+eng`) liest Namen (oben) und Sammlernummer (unten) → Treffer über die TCGdex-API (deutscher und englischer Katalog, wählbar) → Auswahl bestätigen.
 - **Preis:** Cardmarket-Trendpreis (EUR) aus TCGdex, mit Zustandsfaktor (siehe `src/pricing.ts`) – grobe Schätzung. Der Preis gilt pro Karte, nicht pro Sprache: DE und EN erhalten denselben Wert.
+- **Set-Checkliste:** alle Karten eines Sets mit Preisen, Besitz farbig, fehlende grau; Preise laden beim Scrollen (1 Tag Cache).
+- **Filter:** Set, Jahr, Typ, Phase, Seltenheit, Regulierungszeichen, Illustrator, Sprache.
+- **Kartenkunde:** Beispielkarte mit Erklärung aller Elemente.
 - **Daten:** IndexedDB im Browser, mehrere lokale Profile, optionale PIN (kein Verschlüsselungsschutz). Backup/Restore als JSON, Export als CSV.
 - Scan und Suche brauchen Internet; die Sammlung ist offline nutzbar.
 
