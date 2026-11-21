@@ -93,7 +93,7 @@ export function Scanner({ onPick }: { onPick: (c: CardInfo) => void }) {
       setDebug(d)
       if (!p.names.length) { setErr('Kein Kartenname erkannt. Näher ran, besser beleuchten, Reflexe vermeiden – oder die Suche nutzen.'); return }
       setStatus('Suche Karte …')
-      setCards(await findCards({ names: p.names, number: p.number, total: p.total, promoCode: p.promoCode, candidates: p.candidates, lang }))
+      setCards(await findCards({ names: p.names, number: p.number, total: p.total, promoCode: p.promoCode, prefix: p.prefix, candidates: p.candidates, lang }))
     } catch (e) {
       setErr('Fehler: ' + (e as Error).message + ' (Scan braucht Internet für Texterkennung und Kartendaten)')
     } finally { setBusy(false); setStatus('') }
@@ -154,8 +154,10 @@ export function Scanner({ onPick }: { onPick: (c: CardInfo) => void }) {
       {parsed && (
         <p className="muted">
           Erkannt: {parsed.names.slice(0, 3).join(', ') || '–'}
-          {parsed.number !== undefined ? ` · Nr. ${parsed.number}${parsed.total ? `/${parsed.total}` : ''}` : ' · keine Nummer'}
-          {(parsed.candidates?.length ?? 0) > 1 && ` (auch gelesen: ${parsed.candidates!.slice(1, 3).map((c) => `${c.number}/${c.total}`).join(', ')})`}
+          {parsed.number !== undefined
+            ? ` · Nr. ${parsed.prefix ?? ''}${parsed.number}${parsed.total ? `/${parsed.prefix ?? ''}${parsed.total}` : ''}`
+            : parsed.promoCode ? ` · Promo ${parsed.promoCode}` : ' · keine Nummer'}
+          {(parsed.candidates?.length ?? 0) > 1 && ` (auch gelesen: ${parsed.candidates!.slice(1, 3).map((c) => `${c.prefix ?? ''}${c.number}/${c.total}`).join(', ')})`}
         </p>
       )}
       {cards && cards.length === 0 && <p className="muted">Keine Treffer – bitte die manuelle Suche nutzen.</p>}

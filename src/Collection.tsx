@@ -1,11 +1,14 @@
-import { useMemo, useState } from 'react'
-import { db, exportBackup, importBackup, refreshPrices } from './db'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { backfillCardInfo, db, exportBackup, importBackup, refreshPrices } from './db'
 import { useLive, download } from './hooks'
 import type { CollectionEntry, Condition, LangChoice } from './types'
 import { CONDITION_LABEL, fmtEur, totalValue, unitValue } from './pricing'
 import { getCard } from './tcgdex'
 import { toCsv } from './csv'
 import { LangBadge } from './LangSelect'
+import { RarityBadge } from './Rarity'
+import { formatNumber } from './rarity'
+import { openImage } from './ImageViewer'
 
 export function Collection({ profileId }: { profileId: number }) {
   const entries = useLive(() => db.entries.where('profileId').equals(profileId).toArray(), [profileId], [] as CollectionEntry[])
@@ -14,6 +17,14 @@ export function Collection({ profileId }: { profileId: number }) {
   const [sort, setSort] = useState<'added' | 'value' | 'name'>('added')
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
+  const backfilled = useRef(false)
+
+  // ältere Einträge ohne Seltenheit/Setgröße einmal pro Aufruf im Hintergrund ergänzen
+  useEffect(() => {
+    if (backfilled.current || !entries.some((e) => e.rarity === undefined) || !navigator.onLine) return
+    backfilled.current = true
+    backfillCardInfo(profileId, getCard).catch(() => {})
+  }, [entries, profileId])
 
   const shown = useMemo(() => {
     const f = entries.filter(
@@ -93,10 +104,10 @@ function Row({ e }: { e: CollectionEntry }) {
   const u = unitValue(e)
   return (
     <div className="card item">
-      {e.image && <img src={e.image} alt="" loading="lazy" />}
+      {e.image && <img src={e.image} alt="" loading="lazy" onClick={() => openImage(e.image)} />}
       <div className="grow">
         <strong>{e.name}</strong><LangBadge lang={e.lang} />
-        <div className="muted">{e.setName} · {e.localId}</div>
+        <div className="muted">{e.setName} · {formatNumber(e.localId, e.setTotal)}<RarityBadge rarity={e.rarity} /></div>
         <div className="row" style={{ marginTop: 4 }}>
           <select value={e.condition} onChange={(ev) => db.entries.update(e.id!, { condition: ev.target.value as Condition })} style={{ padding: 4 }}>
             {(Object.keys(CONDITION_LABEL) as Condition[]).map((c) => <option key={c} value={c}>{c}</option>)}

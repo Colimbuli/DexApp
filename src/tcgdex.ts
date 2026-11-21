@@ -71,7 +71,9 @@ export interface SearchQuery {
   promoCode?: string
   lang?: LangChoice
   /** weitere Nummern-Lesungen (OCR), werden ebenfalls nachgeschlagen */
-  candidates?: { number: number; total: number }[]
+  candidates?: { number: number; total: number; prefix?: string }[]
+  /** Gallery-Präfix der Hauptlesung (TG, GG, …) */
+  prefix?: string
 }
 
 /**
@@ -90,16 +92,14 @@ async function findCardsIn(lang: Lang, q: SearchQuery): Promise<CardInfo[]> {
   let setHits: CardInfo[] = []
   // 1. Weg: Sammlernummer + Setgröße – unabhängig vom (oft falsch gelesenen) Namen
   const cands = [
-    ...(q.number !== undefined && q.total !== undefined ? [{ number: q.number, total: q.total }] : []),
+    ...(q.number !== undefined && q.total !== undefined ? [{ number: q.number, total: q.total, prefix: q.prefix }] : []),
     ...(q.candidates ?? []),
-  ].filter((c, i, a) => a.findIndex((x) => x.number === c.number && x.total === c.total) === i).slice(0, 3)
-  if (cands.length) {
-    const seenIds = new Set<string>()
-    for (const c of cands) {
-      for (const hit of await findBySetNumber(lang, c.number, c.total)) {
-        if (!seenIds.has(hit.id)) { seenIds.add(hit.id); setHits.push(hit) }
-      }
-    }
+  ].filter((c, i, a) => a.findIndex((x) => x.number === c.number && x.total === c.total && x.prefix === c.prefix) === i).slice(0, 3)
+  const seenIds = new Set<string>()
+  const addHits = (hits: CardInfo[]) => hits.forEach((h) => { if (!seenIds.has(h.id)) { seenIds.add(h.id); setHits.push(h) } })
+  if (q.promoCode) addHits(await findByPromo(lang, q.promoCode))
+  if (cands.length || setHits.length) {
+    for (const c of cands) addHits(await findBySetNumber(lang, c.number, c.total, c.prefix))
     const best = Math.max(0, ...setHits.flatMap((c) => q.names.map((n) => similarity(n, c.name))))
     // Treffer passt zum gelesenen Namen (oder es gibt keinen Namen) → fertig
     if (setHits.length && (best >= 0.5 || !q.names.length)) return setHits
@@ -169,15 +169,39 @@ export async function getSets(lang: Lang): Promise<RawSet[]> {
 }
 
 /** Mögliche localId-Schreibweisen einer Nummer: „044“, „44“. */
-export function localIdVariants(n: number): string[] {
+export function localIdVariants(n: number, prefix?: string): string[] {
+  if (prefix) return [...new Set([2, 1, 3].map((p) => prefix + String(n).padStart(p, '0')))]
   return [...new Set([String(n).padStart(3, '0'), String(n)])]
 }
 
-export async function findBySetNumber(lang: Lang, number: number, total: number): Promise<CardInfo[]> {
+export async function findBySetNumber(lang: Lang, number: number, total: number, prefix?: string): Promise<CardInfo[]> {
   const sets = (await getSets(lang)).filter((x) => x.cardCount?.official === total).slice(0, 8)
   const found = await Promise.all(
     sets.map(async (set) => {
-      for (const lid of localIdVariants(number)) {
+      for (const lid of localIdVariants(number, prefix)) {
+        const c = await getCard(`${set.id}-${lid}`, lang).catch(() => undefined)
+        if (c) return c
+      }
+      return undefined
+    }),
+  )
+  return found.filter((c): c is CardInfo => !!c)
+}
+
+/**
+ * Promokarten („SWSH062“, „SVP 045“, „SM100“): Promo-Sets, deren ID mit dem Präfix
+ * beginnt (swshp, svp, smp, …), mit verschiedenen localId-Schreibweisen abfragen.
+ */
+export async function findByPromo(lang: Lang, code: string): Promise<CardInfo[]> {
+  const m = code.toUpperCase().replace(/[\s-]/g, '').match(/^([A-Z]+)(\d+)$/)
+  if (!m) return []
+  const [, prefix, digits] = m
+  const n = parseInt(digits, 10)
+  const sets = (await getSets(lang)).filter((x) => /promo/i.test(x.name) && x.id.toLowerCase().startsWith(prefix.toLowerCase().replace(/p$/, '')))
+  const ids = [...new Set([prefix + digits, prefix + String(n).padStart(3, '0'), String(n).padStart(3, '0'), String(n)])]
+  const found = await Promise.all(
+    sets.slice(0, 4).map(async (set) => {
+      for (const lid of ids) {
         const c = await getCard(`${set.id}-${lid}`, lang).catch(() => undefined)
         if (c) return c
       }

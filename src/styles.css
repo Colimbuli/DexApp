@@ -36,3 +36,14 @@ dialog::backdrop{background:#000a}
 .seg button.on{background:var(--panel2);color:var(--text);font-weight:600}
 .badge{display:inline-block;font-size:11px;font-weight:700;padding:1px 6px;border-radius:4px;background:var(--panel2);color:var(--text);margin-left:6px;vertical-align:middle}
 .toast{position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ok);color:#10301d;font-weight:600;padding:10px 16px;border-radius:10px;box-shadow:0 4px 16px #0008;z-index:10;max-width:calc(100% - 32px)}
+.item img{cursor:zoom-in}
+.viewer{max-width:none;max-height:none;width:100vw;height:100dvh;margin:0;padding:12px;border-radius:0;background:#000e;display:flex;align-items:center;justify-content:center}
+.viewer:not([open]){display:none}
+.viewer img{max-width:100%;max-height:100%;object-fit:contain;border-radius:14px;cursor:zoom-out}
+.rarity{display:inline-flex;align-items:center;gap:6px;background:#eef1f7;border-radius:6px;padding:1px 6px;margin-left:6px;font-size:13px;font-weight:700;line-height:1.4;vertical-align:middle}
+.rarity-label{font-weight:500;color:#1d2433;font-size:12px;text-shadow:none}
+.r-black{color:#111}
+.r-silver{color:#8b95a7;text-shadow:0 0 1px #fff,0 1px 1px #5c6577}
+.r-gold{color:#c9971c;text-shadow:0 1px 1px #7a5a07}
+.r-shiny{color:#d14fa0;text-shadow:0 1px 1px #6d1d50}
+.r-special{color:#5b3fd6}

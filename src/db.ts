@@ -88,6 +88,8 @@ export async function addToCollection(profileId: number, card: CardInfo, o: AddO
     name: card.name,
     setName: card.setName ?? '',
     localId: card.localId,
+    setTotal: card.setTotal,
+    rarity: card.rarity ?? '',
     image: card.image,
     qty: o.qty,
     condition: o.condition,
@@ -120,6 +122,8 @@ export async function refreshPrices(
           basePrice: card.pricing.eur,
           baseHoloPrice: card.pricing.eurHolo,
           priceUpdated: card.pricing.updated ?? new Date().toISOString(),
+          rarity: card.rarity ?? '',
+          setTotal: card.setTotal,
         })
       updated++
     } catch {
@@ -152,4 +156,26 @@ export async function importBackup(profileId: number, data: unknown): Promise<nu
   const rows = b.entries.map((e) => ({ ...e, profileId, qty: Math.max(1, Math.floor(Number(e.qty) || 1)), lang: e.lang === 'en' ? 'en' : 'de' }))
   await db.entries.bulkAdd(rows as CollectionEntry[])
   return rows.length
+}
+
+/** Ergänzt Seltenheit und Setgröße bei älteren Einträgen (einmalig, braucht Internet). */
+export async function backfillCardInfo(
+  profileId: number,
+  fetchCard: (id: string, lang: Lang) => Promise<CardInfo | undefined>,
+): Promise<number> {
+  const missing = await db.entries.where('profileId').equals(profileId).filter((e) => e.rarity === undefined).toArray()
+  const keys = [...new Set(missing.map((e) => `${e.lang ?? 'de'}|${e.cardId}`))]
+  let done = 0
+  for (const key of keys) {
+    const [lang, id] = key.split(/\|(.*)/s) as [Lang, string]
+    const card = await fetchCard(id, lang).catch(() => undefined)
+    if (!card) continue
+    await db.entries
+      .where('profileId')
+      .equals(profileId)
+      .filter((e) => e.cardId === id && (e.lang ?? 'de') === lang)
+      .modify({ rarity: card.rarity ?? '', setTotal: card.setTotal })
+    done++
+  }
+  return done
 }

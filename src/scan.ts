@@ -153,11 +153,14 @@ export async function scanCanvas(
     const top = await read(prefix + 'Name', band(s, sw, sh, 0, 0.22, 1000))
     const parsed = parseOcr(top, '')
     // Nummer: Modus „verstreuter Text“ (PSM 11), mehrere Ausschnitte, Mehrheitsentscheid
-    const reads: { number: number; total: number }[] = []
+    const reads: { number: number; total: number; prefix?: string }[] = []
+    let numberText = ''
     await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT })
     try {
       for (const [label, y0, y1, x0, x1] of NUMBER_CROPS) {
-        reads.push(...numberMatches(await read(prefix + label, band(s, sw, sh, y0, y1, 800, x0, x1))))
+        const t = await read(prefix + label, band(s, sw, sh, y0, y1, 800, x0, x1))
+        numberText += '\n' + t
+        reads.push(...numberMatches(t))
         const v = vote(reads)
         // sicher genug: eine Lesung zweimal gesehen
         if (v[0]?.votes >= 2) break
@@ -169,6 +172,11 @@ export async function scanCanvas(
     if (parsed.candidates[0]) {
       parsed.number = parsed.candidates[0].number
       parsed.total = parsed.candidates[0].total
+      parsed.prefix = parsed.candidates[0].prefix
+    } else {
+      // Promokarten haben keine „/Gesamt“-Angabe, sondern Codes wie SWSH062
+      const promo = parseOcr('', numberText)
+      parsed.promoCode = promo.promoCode
     }
     return parsed
   }
@@ -197,7 +205,8 @@ export async function scanCanvas(
     if (parsed.number === undefined) {
       parsed.number = p2.number
       parsed.total = p2.total
-      parsed.promoCode = p2.promoCode
+      parsed.prefix = p2.prefix
+      parsed.promoCode ??= p2.promoCode
     }
     const extra = numberMatches(fullText)
     if (extra.length) parsed.candidates = vote([...(parsed.candidates ?? []).flatMap((c) => Array(c.votes).fill(c)), ...extra])

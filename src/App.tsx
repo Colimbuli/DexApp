@@ -5,6 +5,7 @@ import { Scanner } from './Scanner'
 import { Search } from './Search'
 import { Collection } from './Collection'
 import { AddDialog } from './AddDialog'
+import { ImageViewer } from './ImageViewer'
 
 type Tab = 'scan' | 'search' | 'collection'
 
@@ -31,6 +32,7 @@ export function App() {
       {tab === 'search' && <Search onPick={setPick} />}
       {tab === 'collection' && <Collection profileId={profile.id} />}
       <AddDialog card={pick} profileId={profile.id} onClose={() => setPick(undefined)} onAdded={setToast} />
+      <ImageViewer />
       {toast && <div className="toast" role="status">✓ {toast}</div>}
       <nav>
         <button className={tab === 'scan' ? 'on' : ''} onClick={() => setTab('scan')}>📷 Scan</button>

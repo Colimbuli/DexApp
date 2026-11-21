@@ -1,5 +1,6 @@
 import type { CollectionEntry } from './types'
 import { unitValue } from './pricing'
+import { formatNumber } from './rarity'
 
 const esc = (v: string | number) => {
   const s = String(v)
@@ -9,11 +10,11 @@ const dec = (n: number | undefined) => (n === undefined ? '' : n.toFixed(2).repl
 
 /** Semikolon-getrennt mit Dezimalkomma – öffnet direkt in deutschem Excel. */
 export function toCsv(entries: CollectionEntry[]): string {
-  const head = ['Name', 'Sprache', 'Set', 'Nummer', 'Anzahl', 'Zustand', 'Holo', 'Einzelwert EUR', 'Gesamtwert EUR', 'Preisstand']
+  const head = ['Name', 'Sprache', 'Set', 'Nummer', 'Seltenheit', 'Anzahl', 'Zustand', 'Holo', 'Einzelwert EUR', 'Gesamtwert EUR', 'Preisstand']
   const rows = entries.map((e) => {
     const u = unitValue(e)
     return [
-      e.name, (e.lang ?? 'de').toUpperCase(), e.setName, e.localId, e.qty, e.condition, e.holo ? 'ja' : 'nein',
+      e.name, (e.lang ?? 'de').toUpperCase(), e.setName, formatNumber(e.localId, e.setTotal), e.rarity ?? '', e.qty, e.condition, e.holo ? 'ja' : 'nein',
       dec(u), dec(u === undefined ? undefined : u * e.qty), e.priceUpdated?.slice(0, 10) ?? '',
     ].map(esc).join(';')
   })

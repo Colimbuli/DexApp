@@ -222,3 +222,53 @@ describe('Binarisierung', () => {
     expect(out[5 * w + 35]).toBe(255)
   })
 })
+
+import { rarityInfo, formatNumber } from './rarity'
+describe('Seltenheit & Sondernummern', () => {
+  it('Seltenheitssymbole DE/EN', () => {
+    expect(rarityInfo('Common')).toMatchObject({ symbol: '●', color: 'black' })
+    expect(rarityInfo('Häufig')).toMatchObject({ symbol: '●' })
+    expect(rarityInfo('Uncommon')).toMatchObject({ symbol: '◆' })
+    expect(rarityInfo('Nicht so häufig')).toMatchObject({ symbol: '◆' })
+    expect(rarityInfo('Rare')).toMatchObject({ symbol: '★', color: 'black' })
+    expect(rarityInfo('Double rare')).toMatchObject({ symbol: '★★', color: 'black' })
+    expect(rarityInfo('Ultra Rare')).toMatchObject({ symbol: '★★', color: 'silver' })
+    expect(rarityInfo('Illustration rare')).toMatchObject({ symbol: '★', color: 'gold' })
+    expect(rarityInfo('Special illustration rare')).toMatchObject({ symbol: '★★', color: 'gold' })
+    expect(rarityInfo('Hyper rare')).toMatchObject({ symbol: '★★★', color: 'gold' })
+    expect(rarityInfo('None')).toBeUndefined()
+    expect(rarityInfo('')).toBeUndefined()
+  })
+  it('vollständige Nummern', () => {
+    expect(formatNumber('025', 159)).toBe('025/159')
+    expect(formatNumber('201', 198)).toBe('201/198')
+    expect(formatNumber('TG05', 30)).toBe('TG05/TG30')
+    expect(formatNumber('SWSH062', 300)).toBe('SWSH062')
+    expect(formatNumber('25')).toBe('25')
+  })
+  it('liest Gallery-, Secret- und Nummern hinter Regulierungszeichen', () => {
+    expect(numberMatches('F 025/159 ★')).toEqual([{ number: 25, total: 159 }])
+    expect(numberMatches('TG05/TG30')).toEqual([{ number: 5, total: 30, prefix: 'TG' }])
+    expect(numberMatches('201/198')).toEqual([{ number: 201, total: 198 }])
+    expect(parseOcr('', 'SWSH062').promoCode).toBe('SWSH062')
+    expect(parseNumberInput('TG05/TG30')).toEqual({ number: 5, total: 30, prefix: 'TG' })
+    expect(parseNumberInput('swsh062')).toEqual({ number: 62, promoCode: 'SWSH062' })
+  })
+  it('findet Gallery- und Promokarten', async () => {
+    clearSetCache()
+    const mk = (id: string, localId: string, name: string, total: number) => ({ id, localId, name, set: { cardCount: { official: total } }, pricing: {} })
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      const ok = (j: unknown) => ({ ok: true, status: 200, json: async () => j })
+      if (url.endsWith('/en/sets')) return ok([
+        { id: 'swsh9tg', name: 'Brilliant Stars Trainer Gallery', cardCount: { official: 30 } },
+        { id: 'swshp', name: 'SWSH Black Star Promos', cardCount: { official: 307 } },
+      ])
+      if (url.endsWith('/en/cards/swsh9tg-TG05')) return ok(mk('swsh9tg-TG05', 'TG05', 'Pikachu', 30))
+      if (url.endsWith('/en/cards/swshp-SWSH062')) return ok(mk('swshp-SWSH062', 'SWSH062', 'Pikachu V', 307))
+      return { ok: false, status: 404, json: async () => ({}) }
+    }))
+    expect((await findCards({ names: [], number: 5, total: 30, prefix: 'TG', lang: 'en' }))[0]?.id).toBe('swsh9tg-TG05')
+    expect((await findCards({ names: [], promoCode: 'SWSH062', lang: 'en' }))[0]?.id).toBe('swshp-SWSH062')
+    vi.unstubAllGlobals()
+  })
+})

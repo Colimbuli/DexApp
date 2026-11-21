@@ -1,6 +1,8 @@
 export interface NumberCandidate {
   number: number
   total: number
+  /** Gallery-Präfix, z. B. TG bei „TG05/TG30“ */
+  prefix?: string
   votes: number
 }
 
@@ -8,24 +10,33 @@ export interface ParsedOcr {
   number?: number
   total?: number
   promoCode?: string
+  prefix?: string
   names: string[]
   /** alle gelesenen „Nummer/Gesamt“-Varianten, häufigste zuerst */
   candidates?: NumberCandidate[]
 }
 
 /** Alle „025/159“-Muster eines Textes. */
-export function numberMatches(text: string): { number: number; total: number }[] {
-  return [...text.matchAll(/(\d{1,3})\s*[\/|]\s*(\d{2,3})/g)]
-    .map((m) => ({ number: parseInt(m[1], 10), total: parseInt(m[2], 10) }))
-    .filter((c) => c.total >= 10 && c.number > 0 && c.number <= c.total + 150)
+export function numberMatches(text: string): { number: number; total: number; prefix?: string }[] {
+  // Trainer/Galarian Gallery, Radiant Collection, Shiny Vault: „TG05/TG30“
+  const gallery = [...text.matchAll(/\b(TG|GG|RC|SV)\s?(\d{1,3})\s*[\/|]\s*(?:TG|GG|RC|SV)?\s?(\d{2,3})\b/gi)].map((m) => ({
+    number: parseInt(m[2], 10),
+    total: parseInt(m[3], 10),
+    prefix: m[1].toUpperCase(),
+  }))
+  const normal = [...text.matchAll(/(\d{1,3})\s*[\/|]\s*(\d{2,3})/g)].map((m) => ({
+    number: parseInt(m[1], 10),
+    total: parseInt(m[2], 10),
+  }))
+  return [...gallery, ...normal].filter((c) => c.total >= 10 && c.number > 0 && c.number <= c.total + 150)
 }
 
 /** Zählt gleiche Lesungen zusammen; häufigste zuerst. */
-export function vote(reads: { number: number; total: number }[]): NumberCandidate[] {
+export function vote(reads: { number: number; total: number; prefix?: string }[]): NumberCandidate[] {
   const m = new Map<string, NumberCandidate>()
   for (const r of reads) {
-    const k = `${r.number}/${r.total}`
-    const c = m.get(k) ?? { ...r, votes: 0 }
+    const k = `${r.prefix ?? ''}${r.number}/${r.total}`
+    const c = m.get(k) ?? { number: r.number, total: r.total, ...(r.prefix ? { prefix: r.prefix } : {}), votes: 0 }
     c.votes++
     m.set(k, c)
   }
@@ -49,10 +60,11 @@ export function parseOcr(top: string, bottom: string): ParsedOcr {
   const out: ParsedOcr = { names: [] }
 
   const all = `${bottom}\n${top}`
-  const m = all.match(/(\d{1,3})\s*[\/|]\s*(\d{2,3})/)
+  const m = numberMatches(all)[0]
   if (m) {
-    out.number = parseInt(m[1], 10)
-    out.total = parseInt(m[2], 10)
+    out.number = m.number
+    out.total = m.total
+    if (m.prefix) out.prefix = m.prefix
   } else {
     const p = all.match(/\b(SWSH|SVP|SV|SM|XY|BW|HGSS|DP|TG|GG)\s?-?(\d{1,3})\b/i)
     if (p) {

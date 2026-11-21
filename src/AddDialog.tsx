@@ -3,6 +3,9 @@ import type { CardInfo, Condition } from './types'
 import { basePrice, CONDITION_LABEL, fmtEur, unitValue } from './pricing'
 import { addToCollection } from './db'
 import { LangBadge } from './LangSelect'
+import { RarityBadge } from './Rarity'
+import { formatNumber } from './rarity'
+import { openImage } from './ImageViewer'
 
 export function AddDialog({ card, profileId, onClose, onAdded }: { card?: CardInfo; profileId: number; onClose: () => void; onAdded: (msg: string) => void }) {
   const ref = useRef<HTMLDialogElement>(null)
@@ -44,10 +47,10 @@ export function AddDialog({ card, profileId, onClose, onAdded }: { card?: CardIn
   return (
     <dialog ref={ref} onClose={onClose}>
       <div className="item">
-        {card.image && <img src={card.image} alt="" />}
+        {card.image && <img src={card.image} alt="" onClick={() => openImage(card.image)} />}
         <div className="grow">
           <strong>{card.name}</strong><LangBadge lang={card.lang} />
-          <div className="muted">{card.setName} · {card.localId}{card.setTotal ? `/${card.setTotal}` : ''}</div>
+          <div className="muted">{card.setName} · {formatNumber(card.localId, card.setTotal)}<RarityBadge rarity={card.rarity} /></div>
           <div className="muted">{card.rarity}</div>
         </div>
       </div>

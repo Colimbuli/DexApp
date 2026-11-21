@@ -40,6 +40,9 @@ export interface CollectionEntry {
   name: string
   setName: string
   localId: string
+  setTotal?: number
+  /** Seltenheit laut Katalog; '' = unbekannt, undefined = noch nicht ermittelt */
+  rarity?: string
   image?: string
   qty: number
   condition: Condition
