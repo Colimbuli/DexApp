@@ -8,6 +8,7 @@ import { AddDialog } from './AddDialog'
 import { ImageViewer } from './ImageViewer'
 import { Checklist } from './Checklist'
 import { CardGuide } from './CardGuide'
+import { clearSession, restoreSession, saveSession } from './session'
 
 type Tab = 'scan' | 'search' | 'collection' | 'sets' | 'guide'
 
@@ -24,6 +25,23 @@ export function App() {
   const [tab, setTab] = useState<Tab>('collection')
   const [pick, setPick] = useState<CardInfo>()
   const [toast, setToast] = useState('')
+  const [restoring, setRestoring] = useState(true)
+
+  // gemerkte Anmeldung auf diesem Gerät wiederherstellen
+  useEffect(() => {
+    restoreSession().then((p) => { if (p) setProfile(p) }).finally(() => setRestoring(false))
+  }, [])
+
+  function login(p: Profile, remember: boolean) {
+    if (remember && p.id !== undefined) saveSession(p.id)
+    else clearSession()
+    setProfile(p)
+  }
+
+  function logout() {
+    clearSession()
+    setProfile(undefined)
+  }
 
   useEffect(() => {
     if (!toast) return
@@ -31,12 +49,13 @@ export function App() {
     return () => clearTimeout(t)
   }, [toast])
 
-  if (!profile?.id) return <Profiles onLogin={setProfile} />
+  if (restoring) return null
+  if (!profile?.id) return <Profiles onLogin={login} />
 
   return (
     <>
       <div style={{ textAlign: 'right', padding: '8px 16px 0' }} className="muted">
-        {profile.name} · <a href="#" style={{ color: 'var(--accent)' }} onClick={(e) => { e.preventDefault(); setProfile(undefined) }}>Wechseln</a>
+        {profile.name} · <a href="#" style={{ color: 'var(--accent)' }} onClick={(e) => { e.preventDefault(); logout() }}>Abmelden</a>
       </div>
       {tab === 'scan' && <Scanner onPick={setPick} />}
       {tab === 'search' && <Search onPick={setPick} />}

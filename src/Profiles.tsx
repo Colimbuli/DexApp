@@ -4,11 +4,12 @@ import { useLive } from './hooks'
 import { db } from './db'
 import type { Profile } from './types'
 
-export function Profiles({ onLogin }: { onLogin: (p: Profile) => void }) {
+export function Profiles({ onLogin }: { onLogin: (p: Profile, remember: boolean) => void }) {
   const profiles = useLive(() => db.profiles.toArray(), [], [] as Profile[])
   const [name, setName] = useState('')
   const [pin, setPin] = useState('')
   const [unlock, setUnlock] = useState<Profile>()
+  const [remember, setRemember] = useState(false)
   const [pinTry, setPinTry] = useState('')
   const [err, setErr] = useState('')
 
@@ -18,16 +19,17 @@ export function Profiles({ onLogin }: { onLogin: (p: Profile) => void }) {
     const id = await createProfile(name, pin || undefined)
     const p = await db.profiles.get(id)
     setName(''); setPin(''); setErr('')
-    if (p) onLogin(p)
+    // ohne PIN immer angemeldet bleiben; mit PIN erst nach bewusstem Häkchen beim Entsperren
+    if (p) onLogin(p, !p.pinHash)
   }
 
   async function tryLogin(p: Profile) {
-    if (!p.pinHash) return onLogin(p)
-    setUnlock(p); setPinTry(''); setErr('')
+    if (!p.pinHash) return onLogin(p, true)
+    setUnlock(p); setPinTry(''); setErr(''); setRemember(false)
   }
 
   async function confirmPin() {
-    if (unlock && (await verifyPin(unlock, pinTry))) onLogin(unlock)
+    if (unlock && (await verifyPin(unlock, pinTry))) onLogin(unlock, remember)
     else setErr('Falsche PIN')
   }
 
@@ -49,6 +51,10 @@ export function Profiles({ onLogin }: { onLogin: (p: Profile) => void }) {
         <div className="card">
           <label>PIN für {unlock.name}</label>
           <input type="password" inputMode="numeric" value={pinTry} onChange={(e) => setPinTry(e.target.value)} />
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text)' }}>
+            <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} style={{ width: 'auto' }} />
+            Auf diesem Gerät angemeldet bleiben
+          </label>
           <button className="primary" onClick={confirmPin} style={{ marginTop: 8 }}>Entsperren</button>
         </div>
       )}
