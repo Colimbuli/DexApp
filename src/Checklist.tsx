@@ -60,6 +60,18 @@ export function Checklist({ profileId, onPick }: { profileId: number; onPick: (c
     pump()
   }, [pump])
 
+  /** Sichtbare Karte vorziehen, falls sie noch in der Warteschlange steht */
+  const prioritize = useCallback((id: string) => {
+    const i = queue.current.indexOf(id)
+    if (i > 0) { queue.current.splice(i, 1); queue.current.unshift(id) }
+    else if (i < 0) load([id])
+  }, [load])
+
+  // nach dem Öffnen eines Sets alle Kartendaten/Preise im Hintergrund laden
+  useEffect(() => {
+    if (detail) load(detail.cards.map((c) => c.id))
+  }, [detail, load])
+
   // Besitz: Karten-ID → Anzahl (optional nur aktuelle Katalogsprache)
   const ownedQty = useMemo(() => {
     const m = new Map<string, number>()
@@ -95,7 +107,11 @@ export function Checklist({ profileId, onPick }: { profileId: number; onPick: (c
   const missingCards = list.filter((c) => !ownedQty.has(c.id))
   const missingLoaded = missingCards.filter((c) => cards[c.id] !== undefined)
   const missingValue = missingLoaded.reduce((s, c) => s + (basePrice(cards[c.id]?.pricing ?? {}, false) ?? 0), 0)
-  const pct = list.length ? Math.round((ownedCount / list.length) * 100) : 0
+  const pctRaw = list.length ? (ownedCount / list.length) * 100 : 0
+  const pct = pctRaw.toLocaleString('de-DE', { maximumFractionDigits: pctRaw > 0 && pctRaw < 10 ? 1 : 0 })
+  const loadedAll = list.filter((c) => cards[c.id] !== undefined).length
+  const failed = missingCards.filter((c) => cards[c.id] === null).length
+  const complete = missingLoaded.length === missingCards.length && failed === 0
 
   return (
     <main>
@@ -113,17 +129,20 @@ export function Checklist({ profileId, onPick }: { profileId: number; onPick: (c
         <>
           <div className="card">
             <strong>{detail.name}</strong>
-            <div className="muted">{detail.serie?.name}{detail.releaseDate ? ` · ${detail.releaseDate.slice(0, 4)}` : ''}{detail.abbreviation?.official ? ` · ${detail.abbreviation.official}` : ''}</div>
-            <div className="progress"><div style={{ width: `${pct}%` }} /></div>
+            <div className="muted">{[detail.serie?.name, detail.releaseDate?.slice(0, 4), detail.abbreviation?.official].filter(Boolean).join(' · ')}</div>
+            <div className="progress"><div style={{ width: `${pctRaw}%` }} /></div>
             <div className="row" style={{ marginTop: 6 }}>
               <div><div className="muted">Besitz</div><strong>{ownedCount}/{list.length}</strong> <span className="muted">({pct} %)</span></div>
               <div><div className="muted">Wert Besitz</div><span className="price">{fmtEur(ownedValue)}</span></div>
-              <div><div className="muted">Fehlend</div><span className="price">{fmtEur(missingValue)}</span></div>
+              <div><div className="muted">Fehlend</div><span className="price">{complete ? '' : 'mind. '}{fmtEur(missingValue)}</span></div>
             </div>
-            {missingLoaded.length < missingCards.length && (
-              <div className="row" style={{ marginTop: 8 }}>
-                <span className="muted">Preise fehlender Karten: {missingLoaded.length}/{missingCards.length} geladen</span>
-                <button onClick={() => load(list.map((c) => c.id))}>Alle Preise laden</button>
+            {complete === false && loadedAll === list.length && failed > 0 && (
+              <div className="muted" style={{ marginTop: 8 }}>{failed} Karten ohne Daten (Abruf fehlgeschlagen) – Wert unvollständig. Set neu öffnen, um es erneut zu versuchen.</div>
+            )}
+            {loadedAll < list.length && (
+              <div style={{ marginTop: 8 }}>
+                <div className="muted">Preise werden geladen: {loadedAll}/{list.length}</div>
+                <div className="progress loading"><div style={{ width: `${(loadedAll / list.length) * 100}%` }} /></div>
               </div>
             )}
           </div>
@@ -151,12 +170,12 @@ export function Checklist({ profileId, onPick }: { profileId: number; onPick: (c
             }
           />
           {facetActive && loaded.length < list.length && (
-            <p className="muted">Filter berücksichtigen nur Karten mit geladenen Daten ({loaded.length}/{list.length}). <button onClick={() => load(list.map((c) => c.id))}>Alle laden</button></p>
+            <p className="muted">Filter berücksichtigen nur Karten mit geladenen Daten ({loaded.length}/{list.length}).</p>
           )}
           <div className="grid">
             {shown.map((c) => (
               <Tile key={c.id} card={c} info={cards[c.id]} qty={ownedQty.get(c.id) ?? 0} total={detail.cardCount?.official}
-                onVisible={() => load([c.id])}
+                onVisible={() => prioritize(c.id)}
                 onPick={async () => {
                   const info = cards[c.id] ?? (await getCardCached(c.id, lang))
                   if (info) onPick(info)
