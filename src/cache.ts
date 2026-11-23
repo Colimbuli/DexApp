@@ -24,10 +24,10 @@ export async function getSetCached(id: string, lang: Lang): Promise<SetDetail | 
   return set
 }
 
-export async function getSetYear(id: string, lang: Lang): Promise<number | undefined> {
+/** Erscheinungsdatum eines Sets (JJJJ-MM-TT) */
+export async function getSetRelease(id: string, lang: Lang): Promise<string | undefined> {
   const d = (await getSetCached(id, lang))?.releaseDate
-  const y = d ? parseInt(d.slice(0, 4), 10) : NaN
-  return isNaN(y) ? undefined : y
+  return d && /^\d{4}/.test(d) ? d.slice(0, 10) : undefined
 }
 
 export { getSets }

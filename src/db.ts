@@ -169,10 +169,10 @@ export async function importBackup(profileId: number, data: unknown): Promise<nu
   return rows.length
 }
 
-export const INFO_VERSION = 2
+export const INFO_VERSION = 3
 
 /** Felder für Filter, aus Kartendaten und (optional) Erscheinungsjahr des Sets */
-export function cardDetails(card: CardInfo, year?: number): CardDetails & { infoV?: number } {
+export function cardDetails(card: CardInfo, releaseDate?: string | null): CardDetails & { infoV?: number } {
   const d: CardDetails & { infoV?: number } = {
     setId: card.setId,
     category: card.category,
@@ -182,7 +182,11 @@ export function cardDetails(card: CardInfo, year?: number): CardDetails & { info
     illustrator: card.illustrator,
     regulationMark: card.regulationMark,
   }
-  if (year !== undefined) { d.year = year; d.infoV = INFO_VERSION }
+  // null = Set ohne Datum: trotzdem als ergänzt markieren, damit nicht ständig nachgeladen wird
+  if (releaseDate !== undefined) {
+    if (releaseDate) { d.releaseDate = releaseDate; d.year = parseInt(releaseDate.slice(0, 4), 10) }
+    d.infoV = INFO_VERSION
+  }
   return d
 }
 
@@ -193,7 +197,7 @@ export function cardDetails(card: CardInfo, year?: number): CardDetails & { info
 export async function backfillCardInfo(
   profileId: number,
   fetchCard: (id: string, lang: Lang) => Promise<CardInfo | undefined>,
-  fetchYear: (setId: string, lang: Lang) => Promise<number | undefined>,
+  fetchRelease: (setId: string, lang: Lang) => Promise<string | undefined>,
 ): Promise<number> {
   const missing = await db.entries.where('profileId').equals(profileId).filter((e) => (e.infoV ?? 0) < INFO_VERSION).toArray()
   const keys = [...new Set(missing.map((e) => `${e.lang ?? 'de'}|${e.cardId}`))]
@@ -202,12 +206,12 @@ export async function backfillCardInfo(
     const [lang, id] = key.split(/\|(.*)/s) as [Lang, string]
     const card = await fetchCard(id, lang).catch(() => undefined)
     if (!card) continue
-    const year = card.setId ? await fetchYear(card.setId, lang).catch(() => undefined) : undefined
+    const release = card.setId ? await fetchRelease(card.setId, lang).catch(() => undefined) : undefined
     await db.entries
       .where('profileId')
       .equals(profileId)
       .filter((e) => e.cardId === id && (e.lang ?? 'de') === lang)
-      .modify({ rarity: card.rarity ?? '', setTotal: card.setTotal, ...cardDetails(card, year ?? 0) })
+      .modify({ rarity: card.rarity ?? '', setTotal: card.setTotal, ...cardDetails(card, release ?? null) })
     done++
   }
   return done

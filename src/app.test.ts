@@ -297,10 +297,10 @@ describe('Filter & Kartendaten', () => {
     await db.entries.add({ profileId: id, cardId: 'sv03.5-078', lang: 'de', name: 'Gallopa', setName: '151', localId: '078', qty: 1, condition: 'NM', holo: false, addedAt: '' })
     let calls = 0
     const fetchCard = async () => { calls++; return mapCard({ ...raw, id: 'sv03.5-078', rarity: 'Nicht so häufig', types: ['Feuer'], set: { id: 'sv03.5', cardCount: { official: 165 } } } as never, 'de') }
-    await backfillCardInfo(id, fetchCard, async () => 2023)
+    await backfillCardInfo(id, fetchCard, async () => '2023-09-22')
     const e = (await db.entries.where('profileId').equals(id).first())!
-    expect(e).toMatchObject({ year: 2023, types: ['Feuer'], setId: 'sv03.5', rarity: 'Nicht so häufig', setTotal: 165, infoV: INFO_VERSION })
-    await backfillCardInfo(id, fetchCard, async () => 2023)
+    expect(e).toMatchObject({ year: 2023, releaseDate: '2023-09-22', types: ['Feuer'], setId: 'sv03.5', rarity: 'Nicht so häufig', setTotal: 165, infoV: INFO_VERSION })
+    await backfillCardInfo(id, fetchCard, async () => '2023-09-22')
     expect(calls).toBe(1)
   })
 })
@@ -326,5 +326,29 @@ describe('Sammlungssuche nach Nummer', () => {
     expect(find('Pikachu 89')).toEqual(['Pikachu'])
     expect(find('pika')).toEqual(['Pikachu', 'Pikachu V'])
     expect(find('')).toHaveLength(6)
+  })
+})
+
+import { compareBySet, groupBySet } from './setsort'
+import type { CollectionEntry } from './types'
+describe('Sortierung nach Set', () => {
+  const e = (name: string, cardId: string, localId: string, setName: string, releaseDate?: string, qty = 1, basePrice = 1) =>
+    ({ profileId: 1, cardId, lang: 'de', name, localId, setName, releaseDate, year: releaseDate ? +releaseDate.slice(0, 4) : undefined, qty, condition: 'NM', holo: false, basePrice, addedAt: '' }) as CollectionEntry
+  const list = [
+    e('Alt', 'base1-4', '4', 'Grundset'),
+    e('B', 'swsh7-215', '215', 'Drachenwandel', '2021-08-27', 1, 1000),
+    e('C', 'sv03.5-078', '078', '151', '2023-09-22'),
+    e('D', 'swsh7-002', '002', 'Drachenwandel', '2021-08-27', 2, 0.5),
+    e('E', 'sv03.5-TG05', 'TG05', '151', '2023-09-22'),
+    e('F', 'sv03.5-009', '009', '151', '2023-09-22'),
+  ]
+  it('neuestes Set zuerst, innerhalb nach Nummer, ohne Datum ans Ende', () => {
+    expect([...list].sort(compareBySet).map((x) => x.name)).toEqual(['F', 'C', 'E', 'D', 'B', 'Alt'])
+  })
+  it('Gruppen mit Anzahl und Wert', () => {
+    const g = groupBySet([...list].sort(compareBySet))
+    expect(g.map((x) => [x.name, x.year, x.count, x.value])).toEqual([
+      ['151', 2023, 3, 3], ['Drachenwandel', 2021, 3, 1001], ['Grundset', undefined, 1, 1],
+    ])
   })
 })

@@ -77,3 +77,4 @@ dialog::backdrop{background:#000a}
 .guide-list li{margin-bottom:8px;cursor:pointer}
 .guide-list li.on{color:var(--ok)}
 .progress.loading div{background:var(--accent)}
+.set-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:16px;margin:18px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--panel2)}

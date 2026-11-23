@@ -44,6 +44,8 @@ export interface CardDetails {
   illustrator?: string
   regulationMark?: string
   year?: number
+  /** Erscheinungsdatum des Sets (JJJJ-MM-TT) */
+  releaseDate?: string
 }
 
 export interface Profile {

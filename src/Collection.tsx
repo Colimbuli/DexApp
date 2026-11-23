@@ -10,16 +10,17 @@ import { RarityBadge } from './Rarity'
 import { formatNumber } from './rarity'
 import { openImage } from './ImageViewer'
 import { matchesEntry, parseEntryQuery } from './query'
+import { compareBySet, groupBySet } from './setsort'
 import { Filters } from './Filters'
 import { applyFilters, FACETS, type FilterState } from './filters'
-import { getSetYear } from './cache'
+import { getSetRelease } from './cache'
 import { INFO_VERSION } from './db'
 
 export function Collection({ profileId }: { profileId: number }) {
   const entries = useLive(() => db.entries.where('profileId').equals(profileId).toArray(), [profileId], [] as CollectionEntry[])
   const [q, setQ] = useState('')
   const [filters, setFilters] = useState<FilterState>({})
-  const [sort, setSort] = useState<'added' | 'value' | 'name'>('added')
+  const [sort, setSort] = useState<'added' | 'value' | 'name' | 'set'>('added')
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
   const backfilled = useRef(false)
@@ -28,7 +29,7 @@ export function Collection({ profileId }: { profileId: number }) {
   useEffect(() => {
     if (backfilled.current || !entries.some((e) => (e.infoV ?? 0) < INFO_VERSION) || !navigator.onLine) return
     backfilled.current = true
-    backfillCardInfo(profileId, getCard, getSetYear).catch(() => {})
+    backfillCardInfo(profileId, getCard, getSetRelease).catch(() => {})
   }, [entries, profileId])
 
   const shown = useMemo(() => {
@@ -38,6 +39,7 @@ export function Collection({ profileId }: { profileId: number }) {
       added: (a: CollectionEntry, b: CollectionEntry) => b.addedAt.localeCompare(a.addedAt),
       value: (a: CollectionEntry, b: CollectionEntry) => (unitValue(b) ?? 0) * b.qty - (unitValue(a) ?? 0) * a.qty,
       name: (a: CollectionEntry, b: CollectionEntry) => a.name.localeCompare(b.name, 'de'),
+      set: compareBySet,
     }[sort]
     return f.sort(by)
   }, [entries, q, sort, filters])
@@ -75,11 +77,22 @@ export function Collection({ profileId }: { profileId: number }) {
           <option value="added">Neueste</option>
           <option value="value">Wert</option>
           <option value="name">Name</option>
+          <option value="set">Set</option>
         </select>
       </div>
       <Filters items={entries} facets={FACETS} state={filters} onChange={setFilters} />
       {shown.length !== entries.length && <p className="muted">{shown.length} von {entries.length} Einträgen · Wert {fmtEur(totalValue(shown))}</p>}
-      {shown.map((e) => <Row key={e.id} e={e} />)}
+      {sort === 'set'
+        ? groupBySet(shown).map((g) => (
+            <section key={g.key}>
+              <h3 className="set-head">
+                <span>{g.name || 'Unbekanntes Set'}</span>
+                <span className="muted">{[g.year, `${g.count} ${g.count === 1 ? 'Karte' : 'Karten'}`].filter(Boolean).join(' · ')} · <span className="price">{fmtEur(g.value)}</span></span>
+              </h3>
+              {g.entries.map((e) => <Row key={e.id} e={e} />)}
+            </section>
+          ))
+        : shown.map((e) => <Row key={e.id} e={e} />)}
       {entries.length === 0 && <p className="muted">Noch leer. Karten über „Scan“ oder „Suche“ hinzufügen.</p>}
       <h2 style={{ marginTop: 24 }}>Verwalten</h2>
       <div className="row">
