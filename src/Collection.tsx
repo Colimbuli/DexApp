@@ -9,6 +9,7 @@ import { LangBadge } from './LangSelect'
 import { RarityBadge } from './Rarity'
 import { formatNumber } from './rarity'
 import { openImage } from './ImageViewer'
+import { matchesEntry, parseEntryQuery } from './query'
 import { Filters } from './Filters'
 import { applyFilters, FACETS, type FilterState } from './filters'
 import { getSetYear } from './cache'
@@ -31,9 +32,8 @@ export function Collection({ profileId }: { profileId: number }) {
   }, [entries, profileId])
 
   const shown = useMemo(() => {
-    const f = applyFilters(entries, FACETS, filters).filter((e) =>
-      (e.name + ' ' + e.setName + ' ' + (e.illustrator ?? '')).toLowerCase().includes(q.toLowerCase()),
-    )
+    const query = parseEntryQuery(q)
+    const f = applyFilters(entries, FACETS, filters).filter((e) => matchesEntry(e, query))
     const by = {
       added: (a: CollectionEntry, b: CollectionEntry) => b.addedAt.localeCompare(a.addedAt),
       value: (a: CollectionEntry, b: CollectionEntry) => (unitValue(b) ?? 0) * b.qty - (unitValue(a) ?? 0) * a.qty,
@@ -70,7 +70,7 @@ export function Collection({ profileId }: { profileId: number }) {
         <div className="muted">Schätzwert nach Cardmarket-Trend, angepasst an den Zustand.{missing ? ` ${missing} Einträge ohne Preis.` : ''}</div>
       </div>
       <div className="toolbar">
-        <input placeholder="Suchen …" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input placeholder="Name oder Nr. (z. B. 89/149)" value={q} onChange={(e) => setQ(e.target.value)} />
         <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
           <option value="added">Neueste</option>
           <option value="value">Wert</option>

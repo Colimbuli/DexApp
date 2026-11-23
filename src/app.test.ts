@@ -304,3 +304,27 @@ describe('Filter & Kartendaten', () => {
     expect(calls).toBe(1)
   })
 })
+
+import { matchesEntry, parseEntryQuery } from './query'
+describe('Sammlungssuche nach Nummer', () => {
+  const e = (name: string, localId: string, setTotal?: number) => ({ name, setName: 'Set', localId, setTotal })
+  const list = [e('Glurak', '004', 102), e('Pikachu', '089', 149), e('Raichu', '89', 200), e('Lugia', 'TG05', 30), e('Pikachu V', 'SWSH062'), e('Mew', '189', 149)]
+  const find = (q: string) => list.filter((x) => matchesEntry(x, parseEntryQuery(q))).map((x) => x.name)
+  it('Nummer mit/ohne Gesamtzahl und führende Nullen', () => {
+    expect(find('89/149')).toEqual(['Pikachu'])
+    expect(find('089/149')).toEqual(['Pikachu'])
+    expect(find('89 / 149')).toEqual(['Pikachu'])
+    expect(find('89')).toEqual(['Pikachu', 'Raichu'])
+  })
+  it('Sondernummern', () => {
+    expect(find('TG05/TG30')).toEqual(['Lugia'])
+    expect(find('tg5')).toEqual(['Lugia'])
+    expect(find('SWSH062')).toEqual(['Pikachu V'])
+  })
+  it('Name kombiniert und reiner Text', () => {
+    expect(find('Glurak 4/102')).toEqual(['Glurak'])
+    expect(find('Pikachu 89')).toEqual(['Pikachu'])
+    expect(find('pika')).toEqual(['Pikachu', 'Pikachu V'])
+    expect(find('')).toHaveLength(6)
+  })
+})
